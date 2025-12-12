@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/mosaico-labs/mosaico/actions"><img src="https://github.com/mosaico-labs/mosaico/actions/workflows/tests.yml/badge.svg?branch=main" alt="Github Actions Badge"></a>
-  <a href="https://discord.gg/cRCmhH26"><img src="https://shields.io/discord/1413199575442784266" alt="discord" /></a>
+  <a href="https://discord.gg/SFJM9x55b5"><img src="https://shields.io/discord/1413199575442784266" alt="discord" /></a>
 </p>
 
 ## Mosaico
