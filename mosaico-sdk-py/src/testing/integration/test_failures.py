@@ -4,6 +4,8 @@ These tests require the connection to the server (localhost)
 
 import pytest
 import logging as log
+
+from mosaicolabs.handlers import TopicWriter
 from mosaicolabs.comm import MosaicoClient
 from mosaicolabs.enum import SequenceStatus
 
@@ -57,4 +59,17 @@ def test_sequence_invalid_name(_client: MosaicoClient):
             pass
 
     # free resources
+    _client.close()
+
+
+def test_topic_push_not_serializable(_client: MosaicoClient):
+    ontology_type = type
+    # Check raise value
+    with pytest.raises(ValueError, match="is not serializable"):
+        TopicWriter._validate_ontology_type(ontology_type)  # type: ignore (disable pylance complaining)
+    with _client.sequence_create("test-seq-not-seerializable", {}) as sw:
+        # This must fail: type is not serializable
+        tw = sw.topic_create("test-topic-unregistered", {}, ontology_type)  # type: ignore (disable pylance complaining)
+        assert tw is None
+
     _client.close()
