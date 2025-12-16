@@ -402,7 +402,7 @@ pub async fn do_action(
                             trace!(
                                 "discarding chunk `{}` for no query match (row count is {count})",
                                 chunk.chunk_uuid
-                            )
+                            );
                         }
 
                         Ok(())
