@@ -26,6 +26,6 @@ def extract_video_frames(h5_handle, video_dataset_path, timestamps):
 
         for frame_idx, frame in enumerate(container.decode(stream)):
             yield {
-                "timestamps": _resolve_timestamp(frame_idx, frame, timestamps),
+                "timestamp": _resolve_timestamp(frame_idx, frame, timestamps),
                 "image": _encode_jpeg(frame),
             }
