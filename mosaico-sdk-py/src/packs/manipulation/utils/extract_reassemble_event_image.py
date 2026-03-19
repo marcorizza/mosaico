@@ -2,11 +2,9 @@ from functools import lru_cache
 
 from mosaicolabs import Image, ImageFormat
 
-from configs import (
-    EVENT_CAMERA_WIDTH,
-    EVENT_CAMERA_HEIGHT,
-    EVENT_IMAGE_ENCODING,
-)
+EVENT_CAMERA_WIDTH = 346
+EVENT_CAMERA_HEIGHT = 260
+EVENT_IMAGE_ENCODING = "mono8"
 
 EVENT_IMAGE_STRIDE = EVENT_CAMERA_WIDTH
 EVENT_IMAGE_SIZE = EVENT_CAMERA_WIDTH * EVENT_CAMERA_HEIGHT
@@ -22,15 +20,15 @@ def _event_frame_png(x: int | None, y: int | None) -> bytes:
 
     return Image.from_linear_pixels(
         data=list(pixels),
-        stride=EVENT_IMAGE_STRIDE,
-        height=EVENT_CAMERA_HEIGHT,
-        width=EVENT_CAMERA_WIDTH,
-        encoding=EVENT_IMAGE_ENCODING,
         format=ImageFormat.PNG,
+        width=EVENT_CAMERA_WIDTH,
+        height=EVENT_CAMERA_HEIGHT,
+        stride=EVENT_IMAGE_STRIDE,
+        encoding=EVENT_IMAGE_ENCODING,
     ).data
 
 
-def extract_event_image(event) -> Image:
+def extract_reassemble_event_image(event) -> Image:
     if len(event) != 3:
         raise ValueError(f"Expected an event shaped as [x, y, polarity], got {event}")
 
