@@ -13,7 +13,7 @@ class ReassemblePlugin:
     def discover_sequences(self, root: Path) -> list[Path]:
         return sorted(root.glob("*.h5"))
 
-    def build_plan(self, sequence_path: Path) -> SequenceDescriptor:
+    def create_sequence_descriptor(self, sequence_path: Path) -> SequenceDescriptor:
         return SequenceDescriptor(
             sequence_name=sequence_path.stem,
             sequence_metadata={
