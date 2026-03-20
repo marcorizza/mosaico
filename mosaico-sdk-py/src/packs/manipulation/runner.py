@@ -18,7 +18,7 @@ class ManipulationRunner:
             self.ingest_sequence(sequence_path, plugin, client)
 
     def ingest_sequence(self, sequence_path: Path, plugin, client: MosaicoClient) -> None:
-        plan = plugin.build_plan(sequence_path)
+        plan = plugin.create_sequence_descriptor(sequence_path)
 
         with HDF5Reader(sequence_path) as reader:
             with client.sequence_create(
