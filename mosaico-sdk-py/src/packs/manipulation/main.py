@@ -4,9 +4,12 @@ from pathlib import Path
 from mosaicolabs import MosaicoClient
 from packs.manipulation.runner import ManipulationRunner
 
+MOSAICO_HOST = "localhost"
+MOSAICO_PORT = 6726
+
 
 def sequences_stats():
-    with MosaicoClient.connect("localhost", 6726) as client:
+    with MosaicoClient.connect(MOSAICO_HOST, MOSAICO_PORT) as client:
         sequences = client.list_sequences()
         for sequence in sequences:
             try:
@@ -37,7 +40,7 @@ def run_pipeline():
     dataset_root = Path(args.datasets)
     runner = ManipulationRunner()
 
-    with MosaicoClient.connect("localhost", 6726) as client:
+    with MosaicoClient.connect(MOSAICO_HOST, MOSAICO_PORT) as client:
         runner.ingest_root(dataset_root, client)
 
 
