@@ -67,7 +67,10 @@ pub async fn do_action(ctx: Context, action: ActionRequest) -> Result<ActionResp
 #[cfg(test)]
 mod tests {
     use super::*;
-    use mosaicod_core::types::{self, MetadataBlob};
+    use mosaicod_core::{
+        params,
+        types::{self, MetadataBlob},
+    };
     use mosaicod_marshal as marshal;
     use mosaicod_query as query;
     use mosaicod_repo::{self as repo, FacadeSequence, FacadeTopic};
@@ -127,6 +130,8 @@ mod tests {
     /// This test checks the creation against the repository and compares values to check if
     /// the creation was successful.
     async fn sequence_create(pool: sqlx::Pool<repo::Database>) -> sqlx::Result<()> {
+        params::load_configurables_from_env();
+
         let name = "/test_sequence".to_owned();
 
         let repo = repo::testing::Repository::new(pool);

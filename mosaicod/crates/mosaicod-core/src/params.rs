@@ -39,6 +39,12 @@ pub enum Error {
 #[derive(Debug)]
 pub struct ConfigurablesParams {
     pub max_message_size_in_bytes: usize,
+    /// Target message size used during data streaming. Mosaicod will try to
+    /// aggregate a number of Arrow RecordBatches to create a sufficiently large
+    /// message. If the resulting batch size exceeds the limit, it will be capped by
+    /// [`Params::max_batch_size`].
+    ///
+    /// Defaults to 25MB.
     pub target_message_size_in_bytes: usize,
     /// Maximum number of concurrent chunk queries during data catalog filtering
     pub max_concurrent_chunk_queries: usize,
@@ -48,6 +54,18 @@ pub struct ConfigurablesParams {
     /// When a chunk exceeds this size, it is finalized and a new chunk is started.
     /// A value of 0 means unlimited (no automatic splitting).
     pub max_chunk_size_in_bytes: usize,
+    /// Maximum batch size (number of elements inside a arrow record batch) used during data
+    /// streaming
+    ///
+    /// Defaults to default data fusion batch size 8192.
+    pub max_batch_size: usize,
+    /// Defines the amount of memory used by the query engine (DataFusion).
+    /// Set this value to a number greater than 0 to enforce a hard limit
+    /// on the memory allocated by the query engine. Use this setting if
+    /// mosaicod encounters OOM (Out Of Memory) errors.
+    ///
+    /// Defaults to 0 (no limit).
+    pub query_engine_memory_pool: usize,
 }
 
 static ENV: OnceLock<ConfigurablesParams> = OnceLock::new();
@@ -72,6 +90,8 @@ pub fn load_configurables_from_env() {
             "MOSAICO_MAX_CHUNK_SIZE_IN_BYTES",
             256 * 1024 * 1024, // 256 MiB default
         ),
+        max_batch_size: cast_env_var("MOSAICOD_MAX_BATCH_SIZE", 8192),
+        query_engine_memory_pool: cast_env_var("MOSAICOD_QUERY_ENGINE_MEMORY_POOL", 0),
     };
 
     let _ = ENV.set(ev);
