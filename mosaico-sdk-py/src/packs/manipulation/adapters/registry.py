@@ -9,6 +9,7 @@ from packs.manipulation.adapters.robot.measured_force import MeasuredForceAdapte
 from packs.manipulation.adapters.robot.compensated_base_force_torque import (
     CompensatedBaseForceTorqueAdapter,
 )
+from packs.manipulation.adapters.audio.audio import AudioAdapter
 
 class AdapterRegistry:
     def __init__(self) -> None:
@@ -38,5 +39,6 @@ def build_default_adapter_registry() -> AdapterRegistry:
     registry.register(EventsAdapter)
     registry.register(MeasuredForceAdapter)
     registry.register(CompensatedBaseForceTorqueAdapter)
+    registry.register(AudioAdapter)
     return registry
 
