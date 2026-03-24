@@ -1,18 +1,18 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Protocol, Iterable
+from typing import Any, Callable, Protocol, Iterable
+
+from mosaicolabs.models import Serializable
 
 
 @dataclass
 class TopicDescriptor:
     topic_name: str
-    ontology_type: type
+    ontology_type: type[Serializable]
     adapter_id: str
+    payload_iter: Callable[[Path], Iterable[dict]]
+    message_count: Callable[[Path], int]
     metadata: dict[str, Any] = field(default_factory=dict)
-    timestamps_path: str | None = None
-    fields: dict[str, str] = field(default_factory=dict)
-    reader_method: str = "iter_records"
-    reader_kwargs: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
