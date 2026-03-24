@@ -1,7 +1,10 @@
 from pathlib import Path
 
-from mosaicolabs import RobotJoint, Pose, Velocity, ForceTorque, CompressedImage, Image
+from mosaicolabs import RobotJoint, Pose, Velocity, ForceTorque, CompressedImage
+
 from packs.manipulation.contracts import SequenceDescriptor, TopicDescriptor
+from packs.manipulation.ontology.audio import AudioDataStamped
+from packs.manipulation.ontology.event_camera import EventCamera
 
 
 class ReassemblePlugin:
@@ -40,16 +43,20 @@ class ReassemblePlugin:
                 ),
                 TopicDescriptor(
                     topic_name="events",
-                    ontology_type=Image,
+                    ontology_type=EventCamera,
                     adapter_id="reassemble.events",
                     metadata={
                         "sensor_model": "iniVation DAVIS346",
                         "sensor_type": "event_camera",
                         "resolution": "[346, 260]",
-                        "representation": "binary event image",
+                        "representation": "33ms event window with raw events",
+                        "window_ms": 33,
                     },
-                    timestamps_path="timestamps/events",
-                    fields={"event": "events"},
+                    reader_method="iter_event_frames",
+                    reader_kwargs={
+                        "events_path": "events",
+                        "timestamps_path": "timestamps/events",
+                    },
                 ),
                 TopicDescriptor(
                     topic_name="hama1",
@@ -58,6 +65,16 @@ class ReassemblePlugin:
                     reader_method="iter_video_frames",
                     reader_kwargs={
                         "video_path": "hama1",
+                        "timestamps_path": "timestamps/hama1",
+                    },
+                ),
+                TopicDescriptor(
+                    topic_name="hama1_audio",
+                    ontology_type=AudioDataStamped,
+                    adapter_id="reassemble.audio",
+                    reader_method="get_audio",
+                    reader_kwargs={
+                        "audio_path": "hama1_audio",
                         "timestamps_path": "timestamps/hama1",
                     },
                 ),
@@ -72,12 +89,32 @@ class ReassemblePlugin:
                     },
                 ),
                 TopicDescriptor(
+                    topic_name="hama2_audio",
+                    ontology_type=AudioDataStamped,
+                    adapter_id="reassemble.audio",
+                    reader_method="get_audio",
+                    reader_kwargs={
+                        "audio_path": "hama2_audio",
+                        "timestamps_path": "timestamps/hama2",
+                    },
+                ),
+                TopicDescriptor(
                     topic_name="hand",
                     ontology_type=CompressedImage,
                     adapter_id="reassemble.video_frame",
                     reader_method="iter_video_frames",
                     reader_kwargs={
                         "video_path": "hand",
+                        "timestamps_path": "timestamps/hand",
+                    },
+                ),
+                TopicDescriptor(
+                    topic_name="hand_audio",
+                    ontology_type=AudioDataStamped,
+                    adapter_id="reassemble.audio",
+                    reader_method="get_audio",
+                    reader_kwargs={
+                        "audio_path": "hand_audio",
                         "timestamps_path": "timestamps/hand",
                     },
                 ),
