@@ -37,12 +37,53 @@ class HDF5Reader:
                 payload[field_name] = field_value[i]
             yield payload
 
+    def count_records(self, timestamps_path: str) -> int:
+        if self._handle is None:
+            raise RuntimeError("HDF5Reader is not open")
+
+        return len(self._handle[timestamps_path])
+
     def iter_video_frames(self, video_path: str, timestamps_path: str):
         if self._handle is None:
             raise RuntimeError("HDF5Reader is not open")
 
         timestamps = self._handle[timestamps_path][:]
         yield from extract_video_frames(self._handle, video_path, timestamps)
+
+    def count_video_frames(self, timestamps_path: str) -> int:
+        if self._handle is None:
+            raise RuntimeError("HDF5Reader is not open")
+
+        return len(self._handle[timestamps_path])
+
+    def _event_window_layout(
+        self,
+        timestamps_path: str,
+        window_seconds: float,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, int]:
+        if self._handle is None:
+            raise RuntimeError("HDF5Reader is not open")
+
+        if window_seconds <= 0:
+            raise ValueError("window_seconds must be greater than zero")
+
+        timestamps_seconds = self._handle[timestamps_path][:]
+        if len(timestamps_seconds) == 0:
+            empty = np.array([], dtype=np.int64)
+            return empty, empty, empty, 0
+
+        timestamps_ns = np.rint(timestamps_seconds * 1e9).astype(np.int64)
+        window_ns = int(round(window_seconds * 1e9))
+
+        first_ts = int(timestamps_ns[0])
+        last_ts = int(timestamps_ns[-1])
+        num_windows = int(np.ceil((last_ts - first_ts + 1) / window_ns))
+        boundaries_ns = (
+            first_ts + np.arange(num_windows + 1, dtype=np.int64) * window_ns
+        )
+        split_indices = np.searchsorted(timestamps_ns, boundaries_ns, side="left")
+
+        return timestamps_ns, boundaries_ns, split_indices, num_windows
 
     def iter_event_frames(
         self,
@@ -53,23 +94,13 @@ class HDF5Reader:
         if self._handle is None:
             raise RuntimeError("HDF5Reader is not open")
 
-        if window_seconds <= 0:
-            raise ValueError("window_seconds must be greater than zero")
-
-        timestamps_seconds = self._handle[timestamps_path][:]
-        if len(timestamps_seconds) == 0:
+        timestamps_ns, boundaries_ns, split_indices, num_windows = (
+            self._event_window_layout(timestamps_path, window_seconds)
+        )
+        if num_windows == 0:
             return
 
-        timestamps_ns = np.rint(timestamps_seconds * 1e9).astype(np.int64)
-        window_ns = int(round(window_seconds * 1e9))
         events_dataset = self._handle[events_path]
-
-        first_ts = int(timestamps_ns[0])
-        last_ts = int(timestamps_ns[-1])
-        num_windows = int(np.ceil((last_ts - first_ts + 1) / window_ns))
-        boundaries_ns = first_ts + np.arange(num_windows + 1, dtype=np.int64) * window_ns
-
-        split_indices = np.searchsorted(timestamps_ns, boundaries_ns, side="left")
 
         for i in range(num_windows):
             start_idx = int(split_indices[i])
@@ -87,17 +118,77 @@ class HDF5Reader:
                 "event_timestamps_ns": event_timestamps_ns,
             }
 
-    def get_audio(self, audio_path: str, timestamps_path: str):
+    def count_event_frames(
+        self,
+        timestamps_path: str,
+        window_seconds: float = 0.033,
+    ) -> int:
         if self._handle is None:
             raise RuntimeError("HDF5Reader is not open")
 
-        ts_start = self._handle[timestamps_path][0]
-        ts_end = self._handle[timestamps_path][-1]
-        ts_duration = ts_end - ts_start
-        audio_data = self._handle[audio_path][:]
+        _, _, _, num_windows = self._event_window_layout(
+            timestamps_path,
+            window_seconds,
+        )
+        return num_windows
 
-        yield {
-            "ts_start": ts_start,
-            "ts_duration": ts_duration,
-            "audio": audio_data,
-        }
+    def get_audio(
+        self,
+        audio_path: str,
+        timestamps_path: str,
+        max_chunk_bytes: int = 10 * 1024 * 1024,
+    ):
+        if self._handle is None:
+            raise RuntimeError("HDF5Reader is not open")
+
+        timestamps = self._handle[timestamps_path][:]
+        if len(timestamps) == 0:
+            return
+
+        ts_start = float(timestamps[0])
+        ts_end = float(timestamps[-1])
+        ts_duration = ts_end - ts_start
+
+        audio_data = self._handle[audio_path][:]
+        n_samples = len(audio_data)
+        if n_samples == 0:
+            return
+
+        bytes_per_sample = audio_data.dtype.itemsize * (
+            audio_data.shape[1] if audio_data.ndim > 1 else 1
+        )
+        samples_per_chunk = max(1, max_chunk_bytes // bytes_per_sample)
+
+        for i in range(0, n_samples, samples_per_chunk):
+            chunk = audio_data[i : i + samples_per_chunk]
+            chunk_ts_start = ts_start + (i / n_samples) * ts_duration
+            chunk_duration = (len(chunk) / n_samples) * ts_duration
+            yield {
+                "ts_start": chunk_ts_start,
+                "ts_duration": chunk_duration,
+                "audio": chunk,
+            }
+
+    def count_audio(
+        self,
+        audio_path: str,
+        timestamps_path: str,
+        max_chunk_bytes: int = 10 * 1024 * 1024,
+    ) -> int:
+        if self._handle is None:
+            raise RuntimeError("HDF5Reader is not open")
+
+        timestamps = self._handle[timestamps_path][:]
+        if len(timestamps) == 0:
+            return 0
+
+        audio_data = self._handle[audio_path]
+        n_samples = audio_data.shape[0]
+        if n_samples == 0:
+            return 0
+
+        bytes_per_sample = audio_data.dtype.itemsize * (
+            audio_data.shape[1] if len(audio_data.shape) > 1 else 1
+        )
+        samples_per_chunk = max(1, max_chunk_bytes // bytes_per_sample)
+        return int(np.ceil(n_samples / samples_per_chunk))

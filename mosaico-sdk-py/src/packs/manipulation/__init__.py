@@ -1,5 +1,5 @@
 from .contracts import DatasetPlugin, SequenceDescriptor, TopicDescriptor
-from .runner import ManipulationRunner
+from packs.manipulation.runner.runner import ManipulationRunner
 from .adapters.base import BaseAdapter
 
 __all__ = [
