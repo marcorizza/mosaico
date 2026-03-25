@@ -1,5 +1,6 @@
 import argparse
 import logging
+import time
 from pathlib import Path
 
 from rich.console import Console
@@ -55,15 +56,20 @@ def run_pipeline():
     runner = ManipulationRunner(console=console)
 
     try:
+        start_time = time.time()
         LOGGER.info("Starting manipulation ingestion from %s to %s:%s", dataset_root, MOSAICO_HOST, MOSAICO_PORT)
         
         with MosaicoClient.connect(MOSAICO_HOST, MOSAICO_PORT) as client:
             runner.ingest_root(dataset_root, client)
+        
+        elapsed_time = time.time() - start_time
+        hours, remainder = divmod(int(elapsed_time), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        time_str = f"{hours}h {minutes}m {seconds}s" if hours > 0 else f"{minutes}m {seconds}s"
+        LOGGER.info("✓ Manipulation ingestion completed in %s (%.2f seconds)", time_str, elapsed_time)
     except Exception:
         LOGGER.exception("Manipulation ingestion failed for %s", dataset_root)
         raise SystemExit(1)
-
-    LOGGER.info("Manipulation ingestion completed for %s", dataset_root)
 
 
 if __name__ == "__main__":
