@@ -1,10 +1,12 @@
 from pathlib import Path
 
 from mosaicolabs import RobotJoint, Pose, Velocity, ForceTorque, CompressedImage
+
 from packs.manipulation.contracts import SequenceDescriptor, TopicDescriptor
 from packs.manipulation.datasets.reassemble.iterators import *
 from packs.manipulation.ontology.audio import AudioDataStamped
 from packs.manipulation.ontology.event_camera import EventCamera
+from packs.manipulation.ontology.end_effector import EndEffector
 
 
 class ReassemblePlugin:
@@ -182,7 +184,7 @@ class ReassemblePlugin:
                 TopicDescriptor(
                     topic_name="robot_state/measured_force_torque",
                     ontology_type=ForceTorque,
-                    adapter_id="reassemble.measured_force",
+                    adapter_id="reassemble.measured_force_torque",
                     payload_iter=iter_records(
                         timestamps_path="timestamps/measured_force",
                         fields={
@@ -192,5 +194,19 @@ class ReassemblePlugin:
                     ),
                     message_count=count_records("timestamps/measured_force"),
                 ),
+                TopicDescriptor(
+                    topic_name="robot_state/end_effector",
+                    ontology_type=EndEffector,
+                    adapter_id="reassemble.end_effector",
+                    payload_iter=iter_records(
+                        timestamps_path="timestamps/gripper_efforts",
+                        fields={
+                            "gripper_efforts": "robot_state/gripper_efforts",
+                            "gripper_positions": "robot_state/gripper_positions",
+                            "gripper_velocities": "robot_state/gripper_velocities",
+                        },
+                    ),
+                    message_count=count_records("timestamps/gripper_efforts"),
+                )
             ],
         )

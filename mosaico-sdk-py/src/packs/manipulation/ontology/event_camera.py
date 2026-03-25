@@ -4,7 +4,7 @@ import numpy as np
 import pyarrow as pa
 from PIL import Image as PILImage
 
-from mosaicolabs import HeaderMixin, Image, ImageFormat, Serializable
+from mosaicolabs import HeaderMixin, Serializable
 
 
 class Event(Serializable):
