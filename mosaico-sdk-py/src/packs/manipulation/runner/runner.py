@@ -27,6 +27,7 @@ class ManipulationRunner:
         plugin = self.dataset_registry.resolve(root)
         plugin_id = getattr(plugin, "dataset_id", type(plugin).__name__)
         sequence_paths = list(plugin.discover_sequences(root))
+        existing_sequences = set(client.list_sequences())
 
         LOGGER.info(
             "Resolved dataset root %s with plugin '%s' and %d sequence(s)",
@@ -34,6 +35,7 @@ class ManipulationRunner:
             plugin_id,
             len(sequence_paths),
         )
+        LOGGER.info("Found %d existing sequence(s) on server", len(existing_sequences))
 
         if not sequence_paths:
             LOGGER.warning("No sequences discovered under %s", root)
@@ -48,7 +50,14 @@ class ManipulationRunner:
                 len(sequence_paths),
                 sequence_path,
             )
-            plan = self.ingest_sequence(sequence_path, plugin, client)
+            plan = self.ingest_sequence(
+                sequence_path,
+                plugin,
+                client,
+                existing_sequences=existing_sequences,
+            )
+            if plan is None:
+                continue
             ingested.append((plan, sequence_path.stat().st_size))
 
         plans = [plan for plan, _ in ingested]
@@ -69,8 +78,16 @@ class ManipulationRunner:
         sequence_path: Path,
         plugin: DatasetPlugin,
         client: MosaicoClient,
+        existing_sequences: set[str] | None = None,
     ):
         plan = plugin.create_sequence_descriptor(sequence_path)
+
+        if existing_sequences is not None and plan.sequence_name in existing_sequences:
+            LOGGER.warning(
+                "Sequence '%s' already exists, skipping.",
+                plan.sequence_name,
+            )
+            return None
 
         LOGGER.info(
             "Creating sequence '%s' from %s with %d topic(s)",
@@ -103,4 +120,8 @@ class ManipulationRunner:
             len(plan.topics),
             total_messages,
         )
+
+        if existing_sequences is not None:
+            existing_sequences.add(plan.sequence_name)
+
         return plan

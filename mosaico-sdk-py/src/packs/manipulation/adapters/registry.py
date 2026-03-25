@@ -5,11 +5,12 @@ from packs.manipulation.adapters.robot.pose import PoseAdapter
 from packs.manipulation.adapters.robot.velocity import VelocityAdapter
 from packs.manipulation.adapters.vision.video_frame import VideoFrameAdapter
 from packs.manipulation.adapters.vision.events import EventsAdapter
-from packs.manipulation.adapters.robot.measured_force import MeasuredForceAdapter
+from packs.manipulation.adapters.robot.measured_force_torque import MeasuredForceTorqueAdapter
 from packs.manipulation.adapters.robot.compensated_base_force_torque import (
     CompensatedBaseForceTorqueAdapter,
 )
 from packs.manipulation.adapters.audio.audio import AudioAdapter
+from packs.manipulation.adapters.robot.end_effector import EndEffectorAdapter
 
 class AdapterRegistry:
     def __init__(self) -> None:
@@ -37,8 +38,9 @@ def build_default_adapter_registry() -> AdapterRegistry:
     registry.register(VelocityAdapter)
     registry.register(VideoFrameAdapter)
     registry.register(EventsAdapter)
-    registry.register(MeasuredForceAdapter)
+    registry.register(MeasuredForceTorqueAdapter)
     registry.register(CompensatedBaseForceTorqueAdapter)
     registry.register(AudioAdapter)
+    registry.register(EndEffectorAdapter)
     return registry
 
