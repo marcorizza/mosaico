@@ -1,23 +1,23 @@
 from mosaicolabs.comm import MosaicoClient
-from mosaicolabs.models import Time
-from mosaicolabs.models.platform import Topic
-from mosaicolabs.models.query import QueryOntologyCatalog, QueryTopic, QuerySequence
-from mosaicolabs.models.sensors import IMU, GPS
+from mosaicolabs.models.query import QueryOntologyCatalog, QuerySequence, QueryTopic
+from mosaicolabs.models.sensors import GPS, IMU
+from mosaicolabs.types import Time
 from testing.integration.config import (
     UPLOADED_GPS_TOPIC,
     UPLOADED_IMU_CAMERA_TOPIC,
     UPLOADED_IMU_FRONT_TOPIC,
     UPLOADED_SEQUENCE_NAME,
 )
+
 from .helpers import _validate_returned_topic_name
 
 
 def test_query_ontology(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by single condition
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog().with_expression(
             IMU.Q.acceleration.x.geq(0.01)
         )  # set a very small value (data are random, so a small value is likely to be found)
@@ -39,10 +39,10 @@ def test_query_ontology(
 
     # Query by multiple condition: time and value
     tstamp = Time.from_float(1700000000.26)
-    query_resp = _client.query(
-        QueryOntologyCatalog()
-        .with_expression(IMU.Q.header.stamp.sec.eq(tstamp.sec))
-        .with_expression(IMU.Q.header.stamp.nanosec.geq(tstamp.nanosec))
+    query_resp = mosaico_client.query(
+        QueryOntologyCatalog().with_expression(
+            IMU.Q.timestamp_ns.geq(tstamp.to_nanoseconds())
+        )
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -60,10 +60,9 @@ def test_query_ontology(
 
     # Query by multiple condition: time and value (GPS)
     tstamp = Time.from_float(1700000000.26)
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog()
-        .with_expression(GPS.Q.header.stamp.sec.eq(tstamp.sec))
-        .with_expression(GPS.Q.header.stamp.nanosec.geq(tstamp.nanosec))
+        .with_expression(GPS.Q.timestamp_ns.geq(tstamp.to_nanoseconds()))
         .with_expression(GPS.Q.status.service.eq(2))
     )
     # We do expect a successful query
@@ -79,15 +78,15 @@ def test_query_ontology(
     assert query_resp[0].topics[0].name == expected_topic_name
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_query_ontology_between(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by single condition
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog().with_expression(
             IMU.Q.acceleration.x.between([0.0, 1.0])
         )  # set a very small value (data are random, so a small value is likely to be found)
@@ -107,7 +106,7 @@ def test_query_ontology_between(
     assert all([t.name in expected_topic_names for t in query_resp[0].topics])
 
     # Query by mixed conditions
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog().with_expression(
             IMU.Q.acceleration.x.between([0.0, 1.0])
         ),  # set a very small value (data are random, so a small value is likely to be found)
@@ -127,22 +126,20 @@ def test_query_ontology_between(
     assert all([t.name in expected_topic_names for t in query_resp[0].topics])
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_mixed_query_ontology(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by multiple condition: time, topic metadata and sequence name
     tstamp = Time.from_float(1700000000.26)
-    query_resp = _client.query(
-        QueryOntologyCatalog()
-        .with_expression(IMU.Q.header.stamp.sec.eq(tstamp.sec))
-        .with_expression(IMU.Q.header.stamp.nanosec.geq(tstamp.nanosec)),
-        QueryTopic().with_expression(
-            Topic.Q.user_metadata["sensor_id"].eq("imu_front_01")
+    query_resp = mosaico_client.query(
+        QueryOntologyCatalog().with_expression(
+            IMU.Q.timestamp_ns.geq(tstamp.to_nanoseconds())
         ),
+        QueryTopic().with_user_metadata("sensor_id", eq="imu_front_01"),
         QuerySequence().with_name(UPLOADED_SEQUENCE_NAME),
     )
     # We do expect a successful query
@@ -158,11 +155,9 @@ def test_mixed_query_ontology(
 
     # Query by multiple condition: value and topic metadata
     tstamp = Time.from_float(1700000000.26)
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog().with_expression(GPS.Q.status.service.geq(1)),
-        QueryTopic().with_expression(
-            Topic.Q.user_metadata["interface.type"].eq("UART")
-        ),
+        QueryTopic().with_user_metadata("interface.type", eq="UART"),
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -176,19 +171,17 @@ def test_mixed_query_ontology(
     assert query_resp[0].topics[0].name == expected_topic_name
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_mixed_query_no_return(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by multiple condition: value and topic metadata
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog().with_expression(GPS.Q.status.service.geq(1)),
-        QueryTopic().with_expression(
-            Topic.Q.user_metadata["interface.type"].eq("UART")
-        ),
+        QueryTopic().with_user_metadata("interface.type", eq="UART"),
         QuerySequence().with_name("nonexisting-seq"),
     )
     # We do expect a successful query
@@ -197,17 +190,17 @@ def test_mixed_query_no_return(
     assert len(query_resp) == 0
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_query_multi_tag_ontology(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by multiple condition: time and value
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryOntologyCatalog()
-        .with_expression(IMU.Q.header.stamp.sec.gt(0))
+        .with_expression(IMU.Q.timestamp_ns.gt(0))
         .with_expression(GPS.Q.status.service.geq(1))
     )
 
@@ -224,4 +217,4 @@ def test_query_multi_tag_ontology(
         assert len(item.topics) == 3
 
     # free resources
-    _client.close()
+    mosaico_client.close()

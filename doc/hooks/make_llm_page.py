@@ -5,39 +5,43 @@ from markdownify import markdownify as md
 OVERVIEW_PAGES_ORDERED = [
     "index.md",
     "SDK/index.md",
-    "SDK/install.md",
 ]
 HOWTO_PAGES_ORDERED = [
-    "SDK/howto/serialized_writing_from_csv.md",
-    "SDK/howto/serialized_writing_from_multi_csv.md",
     "SDK/howto/interleaved_writing_from_multi_topics.md",
-    "SDK/howto/reading.md",
-    "SDK/howto/streaming.md",
+    "SDK/howto/query_chained.md",
+    "SDK/howto/query_multi_domain.md",
     "SDK/howto/query_sequences.md",
     "SDK/howto/query_topics.md",
-    "SDK/howto/query_data.md",
-    "SDK/howto/query_multi_domain.md",
-    "SDK/howto/query_chained.md",
-    "SDK/howto/ontology_customization.md",
-    "SDK/howto/ros_injection_1.md",
+    "SDK/howto/secure_connection.md",
+    "SDK/howto/serialized_writing_from_csv.md",
+    "SDK/howto/serialized_writing_from_multi_csv.md",
+    "SDK/howto/streaming.md",
+]
+EXAMPLES_PAGES_ORDERED = [
+    "SDK/examples/data_inspection.md",
+    "SDK/examples/index.md",
+    "SDK/examples/ontology_customization.md",
+    "SDK/examples/query_catalogs.md",
+    "SDK/examples/ros_injection.md",
 ]
 INDEPTH_PAGES_ORDERED = [
     "SDK/client.md",
     "SDK/ontology.md",
     "SDK/handling/data-handling.md",
-    "SDK/handling/writing.md",
     "SDK/handling/reading.md",
+    "SDK/handling/writing.md",
     "SDK/query.md",
     "SDK/bridges/ml.md",
     "SDK/bridges/ros.md",
-    "daemon/index.md",
-    "daemon/install.md",
-    "daemon/api_key.md",
+    "SDK/code_contributing.md",
     "daemon/actions.md",
-    "daemon/ingestion.md",
-    "daemon/retrieval.md",
-    "daemon/query.md",
+    "daemon/api_key.md",
     "daemon/cli.md",
+    "daemon/index.md",
+    "daemon/ingestion.md",
+    "daemon/install.md",
+    "daemon/query.md",
+    "daemon/retrieval.md",
     "daemon/tls.md",
     "development/release_cycle.md",
 ]
@@ -45,25 +49,33 @@ INDEPTH_PAGES_ORDERED = [
 API_REFERENCE_PAGES_ORDERED = [
     "SDK/API_reference/comm.md",
     "SDK/API_reference/enum.md",
+    "SDK/API_reference/types.md",
+    "SDK/API_reference/logging.md",
     "SDK/API_reference/handlers/reading.md",
     "SDK/API_reference/handlers/writing.md",
-    "SDK/API_reference/query/builders.md",
-    "SDK/API_reference/query/internal.md",
-    "SDK/API_reference/query/response.md",
     "SDK/API_reference/models/base.md",
     "SDK/API_reference/models/data_types.md",
     "SDK/API_reference/models/geometry.md",
     "SDK/API_reference/models/platform.md",
     "SDK/API_reference/models/sensors.md",
+    "SDK/API_reference/query/builders.md",
+    "SDK/API_reference/query/internal.md",
+    "SDK/API_reference/query/response.md",
     "SDK/API_reference/bridges/ml.md",
-    "SDK/API_reference/bridges/ros/ros.md",
+    "SDK/API_reference/bridges/ros/adapters/base.md",
+    "SDK/API_reference/bridges/ros/adapters/geometry_msgs.md",
+    "SDK/API_reference/bridges/ros/adapters/nav_msgs.md",
+    "SDK/API_reference/bridges/ros/adapters/sensor_msgs.md",
+    "SDK/API_reference/bridges/ros/adapters/std_msgs.md",
+    "SDK/API_reference/bridges/ros/adapters/tf2_msgs.md",
     "SDK/API_reference/bridges/ros/custom_ontology.md",
+    "SDK/API_reference/bridges/ros/ros.md",
 ]
-
 # Combined list: Docs first for context, API Reference second for technical depth
 FULL_DOC_PAGES_ORDER = (
     OVERVIEW_PAGES_ORDERED
     + HOWTO_PAGES_ORDERED
+    + EXAMPLES_PAGES_ORDERED
     + INDEPTH_PAGES_ORDERED
     + API_REFERENCE_PAGES_ORDERED
 )
@@ -152,7 +164,10 @@ def _make_llms_architecture_page(config):
         f.write("---\n\n")
 
         for path in (
-            OVERVIEW_PAGES_ORDERED + HOWTO_PAGES_ORDERED + INDEPTH_PAGES_ORDERED
+            OVERVIEW_PAGES_ORDERED
+            + HOWTO_PAGES_ORDERED
+            + EXAMPLES_PAGES_ORDERED
+            + INDEPTH_PAGES_ORDERED
         ):
             if path in content_map:
                 f.write("\n\n\n")

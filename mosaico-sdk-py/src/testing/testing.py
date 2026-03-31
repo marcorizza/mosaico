@@ -1,7 +1,6 @@
 import argparse
-
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -40,6 +39,16 @@ def mosaico_testing():
         action="store_true",
         help="Exit pytest after first failure (same as pytest -x, --exitfirst).",
     )
+    parser.add_argument(
+        "--tls",
+        action="store_true",
+        help="Enable TLS connection with the server",
+    )
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="Pass API-Key to server connection",
+    )
     parser.add_argument("-q", "--quiet", action="store_true", help="Quiet mode.")
 
     # Connection Arguments
@@ -64,6 +73,12 @@ def mosaico_testing():
 
     if args.exitfirst:
         pytest_args.append("-x")
+
+    if args.tls:
+        pytest_args.append("--tls")
+
+    if args.api_key:
+        pytest_args += ["--api-key", args.api_key]
 
     if not args.quiet:
         pytest_args.append("-v")

@@ -5,6 +5,12 @@ description: Handlers, Writers, and Streamers.
 
 The **Reading Workflow** in Mosaico is architected to separate resource discovery from high-volume data transmission. This is achieved through two distinct layers: **Handlers**, which serve as metadata proxies, and **Streamers**, which act as the high-performance data engines.
 
+!!! info "API-Keys"
+    When the connection is established via the authorization middleware (i.e. using an [API-Key](../client.md#2-authentication-api-key)), the reading workflow requires the minimum [`APIKeyPermissionEnum.Read`][mosaicolabs.enum.APIKeyPermissionEnum.Read] permission.
+
+!!! example "Try-It Out"
+    You can experiment yourself the Handlers module via the **[Data Discovery and Inspection](../examples/query_catalogs.md) Example**.
+
 ### Handlers: The Catalog Layer
 
 Handlers are lightweight objects that represent a server-side resource. Their primary role is to provide immediate access to system information and user-defined metadata **without downloading the actual sensor data**. They act as the "Catalog" layer of the SDK, allowing you to inspect the contents of the platform before committing to a high-bandwidth data stream.
@@ -15,6 +21,8 @@ Mosaico provides two specialized handler types: `SequenceHandler` and `TopicHand
 API Reference: [`mosaicolabs.handlers.SequenceHandler`][mosaicolabs.handlers.SequenceHandler].
 
 Represents a complete recording session. It provides a holistic view, allowing you to inspect all available topic names, global sequence metadata, and the overall temporal bounds (earliest and latest timestamps) of the session.
+
+Spawning a new sequence handler is done via the [`MosaicoClient.sequence_handler()`][mosaicolabs.comm.MosaicoClient.sequence_handler] factory method.
 
 This example demonstrates how to use a Sequence handler to inspect metadata.
 
@@ -42,6 +50,8 @@ with MosaicoClient.connect("localhost", 6726) as client:
 API Reference: [`mosaicolabs.handlers.TopicHandler`][mosaicolabs.handlers.TopicHandler].
 
 Represents a specific data channel within a sequence (e.g., a single IMU or Camera). It provides granular system info, such as the specific ontology model used and the data volume of that individual stream.
+
+Spawning a new topic handler is done via the [`MosaicoClient.topic_handler()`][mosaicolabs.comm.MosaicoClient.topic_handler] factory method, or via [`SequenceHandler.get_topic_handler()`][mosaicolabs.handlers.SequenceHandler.get_topic_handler] factory method.
 
 This example demonstrates how to use a Topic handler to inspect metadata.
 
@@ -75,7 +85,9 @@ API Reference: [`mosaicolabs.handlers.SequenceDataStreamer`][mosaicolabs.handler
 
 The **`SequenceDataStreamer`** is a unified engine designed specifically for sensor fusion and full-system replay. It allows you to consume multiple data streams as if they were a single, coherent timeline.
 
-To achieve this, the streamer employs the following technical mechanisms:
+Spawning a new sequence data streamer is done via the [`SequenceHandler.get_data_streamer()`][mosaicolabs.handlers.SequenceHandler.get_data_streamer] factory method.
+
+When streaming data, the streamer employs the following technical mechanisms:
 
 * **K-Way Merge Sorting**: The streamer monitors the timestamps across all requested topics simultaneously. On every iteration, it "peeks" at the next available message from each topic and yields the one with the lowest timestamp.
 * **Strict Chronological Order**: This sorting ensures that messages are delivered in exact acquisition order, effectively normalizing topics that may operate at vastly different frequencies (e.g., high-rate IMU vs. low-rate GPS).
@@ -118,6 +130,8 @@ API Reference: [`mosaicolabs.handlers.TopicDataStreamer`][mosaicolabs.handlers.T
 
 The **`TopicDataStreamer`** provides a dedicated, high-throughput channel for interacting with a single data resource. By bypassing the complex synchronization logic required for merging multiple topics, it offers the lowest possible overhead for tasks requiring isolated data streams, such as training models on specific camera frames or IMU logs.
 
+Spawning a new topic data streamer is done via the [`TopicHandler.get_data_streamer()`][mosaicolabs.handlers.TopicHandler.get_data_streamer] factory method.
+
 To ensure efficiency, the streamer supports the following features:
 
 * **Temporal Slicing**: Much like the `SequenceDataStreamer`, you can extract data in a time-windowed fashion by specifying `start_timestamp_ns` and `end_timestamp_ns`. This ensures that only the relevant portion of the stream is retrieved rather than the entire dataset.
@@ -141,7 +155,7 @@ with MosaicoClient.connect("localhost", 6726) as client:
         )
 
         # Peek at the start time
-        print(f"Recording starts at: {streamer.next_timestamp()}")
+        print(f"Recording starts at: {imu_stream.next_timestamp()}")
 
         # Direct, low-overhead loop
         for imu_msg in imu_stream:

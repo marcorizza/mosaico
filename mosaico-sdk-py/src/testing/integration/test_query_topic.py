@@ -1,28 +1,29 @@
-from mosaicolabs.comm import MosaicoClient
-from mosaicolabs.models import Time
-from mosaicolabs.models.platform import Topic
-from mosaicolabs.models.query import QuerySequence, QueryTopic
 import pytest
+
+from mosaicolabs.comm import MosaicoClient
+from mosaicolabs.models.query import QuerySequence, QueryTopic
+from mosaicolabs.types import Time
 from testing.integration.config import (
     UPLOADED_IMU_CAMERA_TOPIC,
     UPLOADED_IMU_FRONT_TOPIC,
     UPLOADED_SEQUENCE_NAME,
 )
+
 from .helpers import (
+    _validate_returned_topic_name,
     topic_to_metadata_dict,
     topic_to_ontology_class_dict,
-    _validate_returned_topic_name,
 )
 
 
 @pytest.mark.parametrize("topic_name", list(topic_to_metadata_dict.keys()))
 def test_query_topic_by_name(
-    _client: MosaicoClient,
+    mosaico_client: MosaicoClient,
     topic_name,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Trivial: query by topic name
-    query_resp = _client.query(QueryTopic().with_name_match(topic_name))
+    query_resp = mosaico_client.query(QueryTopic().with_name_match(topic_name))
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
     # One (1) sequence corresponds to this query
@@ -39,15 +40,15 @@ def test_query_topic_by_name(
     # the topic name only succeeded, the operator works
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_query_topic_by_creation_timestamp(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by creation time, up to now (the sequence has been pushed few seconds ago)
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QuerySequence().with_name(
             UPLOADED_SEQUENCE_NAME
         ),  # limit to this sequence for avoiding other sequences created by other tests (ensure controllability)
@@ -66,18 +67,18 @@ def test_query_topic_by_creation_timestamp(
     assert all([t.name in expected_topic_names for t in query_resp[0].topics])
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 @pytest.mark.parametrize("topic_name", list(topic_to_metadata_dict.keys()))
 def test_query_topic_by_sensor_tag(
-    _client: MosaicoClient,
+    mosaico_client: MosaicoClient,
     topic_name,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Query by ontology_tag
     ontology_tag = topic_to_ontology_class_dict[topic_name].ontology_tag()
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QuerySequence().with_name(
             UPLOADED_SEQUENCE_NAME
         ),  # limit to this sequence for avoiding other sequences created by other tests (ensure controllability)
@@ -100,19 +101,19 @@ def test_query_topic_by_sensor_tag(
     assert all([t.name in expected_topic_names for t in query_resp[0].topics])
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 @pytest.mark.parametrize("topic_name", list(topic_to_metadata_dict.keys()))
 def test_query_topic_multi_criteria(
-    _client: MosaicoClient,
+    mosaico_client: MosaicoClient,
     topic_name,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Test with multiple criteria
     # Query by ontology_tag
     ontology_tag = topic_to_ontology_class_dict[topic_name].ontology_tag()
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QuerySequence().with_name(
             UPLOADED_SEQUENCE_NAME
         ),  # limit to this sequence for avoiding other sequences created by other tests (ensure controllability)
@@ -145,7 +146,7 @@ def test_query_topic_multi_criteria(
     time_now_plus_1m = Time.from_float(
         Time.now().to_float() + 60.0
     )  # 1 minutes in the future
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QuerySequence().with_name(
             UPLOADED_SEQUENCE_NAME
         ),  # limit to this sequence for avoiding other sequences created by other tests (ensure controllability)
@@ -174,18 +175,16 @@ def test_query_topic_multi_criteria(
     assert all([t.name in expected_topic_names for t in query_resp[0].topics])
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_query_topic_metadata(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Trivial: query by topic name
-    query_resp = _client.query(
-        QueryTopic().with_expression(
-            Topic.Q.user_metadata["serial_number"].eq("IMUF-9A31D72X")
-        )
+    query_resp = mosaico_client.query(
+        QueryTopic().with_user_metadata("serial_number", eq="IMUF-9A31D72X")
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -200,10 +199,8 @@ def test_query_topic_metadata(
     _validate_returned_topic_name(query_resp[0].topics[0].name)
 
     # Test with single condition
-    query_resp = _client.query(
-        QueryTopic().with_expression(
-            Topic.Q.user_metadata["serial_number"].eq("IMUF-9A31D72X")
-        )
+    query_resp = mosaico_client.query(
+        QueryTopic().with_user_metadata("serial_number", eq="IMUF-9A31D72X")
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -218,10 +215,10 @@ def test_query_topic_metadata(
     _validate_returned_topic_name(query_resp[0].topics[0].name)
 
     # Test with multiple conditions
-    query_resp = _client.query(
+    query_resp = mosaico_client.query(
         QueryTopic()
-        .with_expression(Topic.Q.user_metadata["serial_number"].eq("IMUF-9A31D72X"))
-        .with_expression(Topic.Q.user_metadata["bias_stability"].gt(0.01))
+        .with_user_metadata("serial_number", eq="IMUF-9A31D72X")
+        .with_user_metadata("bias_stability", between=(0.005, 0.015))
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -236,8 +233,8 @@ def test_query_topic_metadata(
     _validate_returned_topic_name(query_resp[0].topics[0].name)
 
     # Test with multiple returned topic matches
-    query_resp = _client.query(
-        QueryTopic().with_expression(Topic.Q.user_metadata["bias_stability"].geq(0.01))
+    query_resp = mosaico_client.query(
+        QueryTopic().with_user_metadata("bias_stability", geq=0.01)
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -254,10 +251,8 @@ def test_query_topic_metadata(
     assert all([t.name in expected_topic_names for t in query_resp[0].topics])
 
     # Test with nested field
-    query_resp = _client.query(
-        QueryTopic().with_expression(
-            Topic.Q.user_metadata["interface.type"].eq("Ethernet")
-        )
+    query_resp = mosaico_client.query(
+        QueryTopic().with_user_metadata("interface.type", eq="Ethernet")
     )
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
@@ -272,24 +267,24 @@ def test_query_topic_metadata(
     assert query_resp[0].topics[0].name == expected_topic_name
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 @pytest.mark.parametrize("topic_name", list(topic_to_metadata_dict.keys()))
 def test_query_topic_from_response(
-    _client: MosaicoClient,
+    mosaico_client: MosaicoClient,
     topic_name,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Trivial: query by topic name
-    query_resp = _client.query(QueryTopic().with_name_match(topic_name))
+    query_resp = mosaico_client.query(QueryTopic().with_name_match(topic_name))
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
     # The other criteria have been tested above...
     # This translates to:
     # 'query among the topics included in the returned response'
     qtopic = query_resp.to_query_topic()
-    query_resp = _client.query(qtopic)
+    query_resp = mosaico_client.query(qtopic)
     assert query_resp is not None and not query_resp.is_empty()
     assert len(query_resp) == 1
     # One (1) topic corresponds to this query
@@ -299,7 +294,9 @@ def test_query_topic_from_response(
     assert query_resp[0].topics[0].name == topic_name
 
     # Try a trivial query with a further expression
-    query_resp = _client.query(qtopic.with_created_timestamp(time_end=Time.now()))
+    query_resp = mosaico_client.query(
+        qtopic.with_created_timestamp(time_end=Time.now())
+    )
     assert query_resp is not None and not query_resp.is_empty()
     assert len(query_resp) == 1
     # One (1) topic corresponds to this query
@@ -309,17 +306,17 @@ def test_query_topic_from_response(
     assert query_resp[0].topics[0].name == topic_name
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 @pytest.mark.parametrize("topic_name", list(topic_to_metadata_dict.keys()))
 def test_query_topic_from_response_fail(
-    _client: MosaicoClient,
+    mosaico_client: MosaicoClient,
     topic_name,
-    _inject_sequence_data_stream,  # Ensure the data are available on the data platform
+    inject_synthetic_sequence,  # Ensure the data are available on the data platform
 ):
     # Trivial: query by topic name
-    query_resp = _client.query(QueryTopic().with_name_match(topic_name))
+    query_resp = mosaico_client.query(QueryTopic().with_name_match(topic_name))
     # We do expect a successful query
     assert query_resp is not None and not query_resp.is_empty()
     # The other criteria have been tested above...
@@ -328,9 +325,9 @@ def test_query_topic_from_response_fail(
     qtopic = query_resp.to_query_topic()
     # This must fail: field 'name' is already queried
     with pytest.raises(
-        NotImplementedError, match="Query builder already contains the key 'name'"
+        NotImplementedError, match="Query builder already contains the key 'locator'"
     ):
-        query_resp = _client.query(qtopic.with_name_match(""))
+        query_resp = mosaico_client.query(qtopic.with_name_match(""))
 
     # free resources
-    _client.close()
+    mosaico_client.close()

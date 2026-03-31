@@ -1,30 +1,30 @@
 use super::flight;
-use log::{error, info, trace};
-use mosaicod_repo as repo;
+use mosaicod_db as db;
 use mosaicod_store as store;
+use tracing::{debug, error};
 
 /// Mosaico server.
-/// Handles incoming requests and manages the repository and store.
+/// Handles incoming requests and manages the database and store.
 pub struct Server {
-    /// Listen on all addresses, including LAN and public addresses
-    pub host: bool,
-
-    pub port: u16,
     /// Shutdown notifier used to signal server shutdown
     pub shutdown: flight::ShutdownNotifier,
+
+    pub flight_config: flight::Config,
+
     /// Store engine
     store: store::StoreRef,
-    /// Repository configuration params
-    pub repo_config: repo::Config,
+
+    /// Database handler
+    db: db::Database,
 }
 
 impl Server {
-    pub fn new(host: bool, port: u16, store: store::StoreRef, repo_config: repo::Config) -> Self {
+    /// Creates a new server.
+    pub fn new(host: String, port: u16, store: store::StoreRef, db: db::Database) -> Self {
         Self {
-            host,
-            port,
+            flight_config: flight::Config::new(host, port),
             store,
-            repo_config,
+            db,
             shutdown: flight::ShutdownNotifier::default(),
         }
     }
@@ -34,55 +34,27 @@ impl Server {
     /// The `on_start` callback is called once the server has started.
     ///
     /// This method startup a Tokio runtime to handle async operations.
-    ///
-    /// Since the `repo` requires an async context to be initialized,
-    /// the initialization of the [`repo::Repository`] is done inside this method.
-    pub fn start_and_wait<F>(&self, on_start: F) -> Result<(), Box<dyn std::error::Error>>
+    pub fn start_and_wait<F>(
+        &self,
+        rt: tokio::runtime::Runtime,
+        on_start: F,
+    ) -> Result<(), Box<dyn std::error::Error>>
     where
         F: FnOnce(),
     {
-        let host = if self.host { "0.0.0.0" } else { "127.0.0.1" };
-
-        let config = flight::Config {
-            host: host.to_owned(),
-            port: self.port,
-        };
-
         let shutdown = self.shutdown.clone();
 
-        info!("startup multi-threaded runtime");
-        let rt = tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap();
-
-        info!("startup store connection");
-
-        // Repo connection needs to be done in a async context
-        // this is the main reason for which in Server::new we pass
-        // `repo::Config` instead of the repo directly.
-        info!("startup repository connection (database)");
-        let repo = rt.block_on(async {
-            let repo = repo::Repository::try_new(&self.repo_config)
-                .await
-                .inspect_err(|e| error!("{}", e))?;
-
-            // Bootstrap logic
-            info!("repository initialization");
-            let mut tx = repo.transaction().await?;
-            repo::layer_bootstrap(&mut tx).await?;
-            tx.commit().await?;
-
-            Ok::<repo::Repository, Box<dyn std::error::Error>>(repo)
-        })?;
-
         let store = self.store.clone();
+        let database = self.db.clone();
+
+        let config = self.flight_config.clone();
+
         rt.block_on(async {
             // Create a thread in tokio runtime to handle flight requests
             let handle_flight = rt.spawn(async move {
-                trace!("flight service starting");
-                if let Err(err) = flight::start(config, store, repo, Some(shutdown)).await {
-                    error!("flight server error: {}", err);
+                debug!("flight service starting");
+                if let Err(err) = flight::start(config, store, database, Some(shutdown)).await {
+                    error!("{}", err);
                 }
             });
 
@@ -91,7 +63,7 @@ impl Server {
             let _ = tokio::join!(handle_flight);
         });
 
-        info!("stopped");
+        debug!("flight service stopped");
 
         Ok(())
     }

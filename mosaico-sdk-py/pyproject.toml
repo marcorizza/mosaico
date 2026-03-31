@@ -1,37 +1,65 @@
 [tool.poetry]
-name = "mosaico-sdk-py"
-version = "0.2.6"
-description = "SDK for Mosaico Data-Platform"
-authors = ["Mosaico Labs <info@mosaico.com>"]
+name = "mosaicolabs"
+version = "0.3.0"
+description = "Python SDK for Mosaico Data-Platform"
+authors = ["Mosaico Labs <info@mosaico.dev>"]
+readme = "README.md"
+license = "AGPL-3.0"
+keywords = [
+    "mosaicolabs",
+    "mosaico-sdk",
+    "data-platform",
+    "physical-ai",
+    "robotics",
+    "ros",
+]
 
 packages = [{ include = "mosaicolabs", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.13,<4"
+python = ">=3.10,<4"
 pyarrow = ">=22.0.0"
 numpy = ">=2.0.0,<2.5.0"
-pyarrow-stubs = ">=20.0.0.20250928,<21.0.0.0"
 pillow = ">=11.3.0,<13.0.0"
 pandas = ">=2.3.3,<4.0.0"
 pydantic = "^2.12.5"
 rich = "^14.3.3"
 rosbags = "^0.11.0"
-click = "^8.3.1"
-opencv-python = "^4.13.0.92"
+deprecated = "^1.3.1"
+typing-extensions = "^4.15.0"
 av = "^17.0.0"
+click = "^8.3.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.4.2"
+ruff = "^0.15.8"
+pre-commit = "^4.5.1"
 
+[tool.ruff]
+line-length = 88
 
-# ROS 1/2 messages (sensor_msgs) are typically system packages, but for development/testing 
-# you might need a Python wrapper, e.g., rosidl_runtime_py or a specific wrapper 
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["COM812", "E501"]
+
+[tool.ruff.format]
+skip-magic-trailing-comma = false
+quote-style = "double"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+
+# ROS 1/2 messages (sensor_msgs) are typically system packages, but for development/testing
+# you might need a Python wrapper, e.g., rosidl_runtime_py or a specific wrapper
 # for sensor_msgs if you can't rely on the user's sourced ROS environment.
 # Since you're using rosbags, relying on its abilities to read ROS messages is the standard approach.
+
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-"mosaico.ros_injector" = "mosaicolabs.ros_bridge.injector:ros_injector"
-"mosaico.testing" = "testing.testing:mosaico_testing"
+"mosaicolabs.ros_injector" = "mosaicolabs.ros_bridge.injector:ros_injector"
+"mosaicolabs.examples" = "mosaicolabs.examples.cli:run_example_cli"
+"mosaicolabs.testing" = "testing.testing:mosaico_testing"

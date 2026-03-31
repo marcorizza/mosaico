@@ -5,7 +5,8 @@ const TIMESTAMP_UB_POS_SENTINEL: i64 = i64::MAX;
 /// SEntinel value to represent the negative unbounded timestamp
 const TIMESTAMP_UB_NEG_SENTINEL: i64 = i64::MIN;
 
-/// Timestamp format used by mosaico, currently this timestamp represent nanoseconds units of time
+/// Timestamp format used by mosaico, currently this timestamp represent nanoseconds
+/// units of time (stored as 64bit integer)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
 pub struct Timestamp(i64);
 
@@ -64,6 +65,13 @@ impl std::fmt::Display for Timestamp {
     }
 }
 
+impl std::ops::Add<std::time::Duration> for Timestamp {
+    type Output = Self;
+    fn add(self, rhs: std::time::Duration) -> Self::Output {
+        Self(self.0 + (rhs.as_nanos() as i64))
+    }
+}
+
 impl From<i64> for Timestamp {
     fn from(value: i64) -> Self {
         Timestamp(value)
@@ -76,11 +84,14 @@ impl From<Timestamp> for i64 {
     }
 }
 
-impl From<Timestamp> for DateTime {
-    fn from(value: Timestamp) -> Self {
-        Self(chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(
-            value.0,
-        ))
+impl From<chrono::DateTime<chrono::Utc>> for Timestamp {
+    fn from(datetime: chrono::DateTime<chrono::Utc>) -> Self {
+        Self(datetime.timestamp_nanos_opt().unwrap_or_else(|| {
+            panic!(
+                "unable to retrieve unix timestamp from date time {}",
+                datetime
+            )
+        }))
     }
 }
 
@@ -95,6 +106,10 @@ pub struct TimestampRange {
 }
 
 impl TimestampRange {
+    pub fn unbounded() -> Self {
+        Self::between(Timestamp::unbounded_neg(), Timestamp::unbounded_pos())
+    }
+
     pub fn between(start: Timestamp, end: Timestamp) -> Self {
         Self { start, end }
     }
@@ -151,7 +166,15 @@ impl DateTime {
 
 impl std::fmt::Display for DateTime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.0.format("%Y-%m-%d %H:%M UTC"))
+    }
+}
+
+impl From<Timestamp> for DateTime {
+    fn from(value: Timestamp) -> Self {
+        Self(chrono::DateTime::<chrono::Utc>::from_timestamp_nanos(
+            value.0,
+        ))
     }
 }
 

@@ -6,14 +6,20 @@ by merging multiple topic streams into a single, time-ordered iterator.
 """
 
 import json
-from mosaicolabs.models.message import Message
-import pyarrow.flight as fl
-from typing import Any, List, Optional, Dict
+from typing import Any, Dict, List, Optional
 
-from .endpoints import TopicParsingError, TopicResourceManifest
+import pyarrow.flight as fl
+
+from mosaicolabs.models.message import Message
+
+from ..logging_config import get_logger
+from ..platform.resource_info import TopicResourceInfo
+from ..platform.resource_manifests import (
+    TopicManifestError,
+    TopicResourceManifest,
+)
 from .internal.topic_read_state import _TopicReadState
 from .topic_reader import TopicDataStreamer
-from ..logging_config import get_logger
 
 # Set the hierarchical logger
 logger = get_logger(__name__)
@@ -157,22 +163,25 @@ class SequenceDataStreamer:
         # Extract the Topics resource manifests data and their tickets
         for ep in flight_info.endpoints:
             try:
-                topic_resrc_mdata = TopicResourceManifest.from_flight_endpoint(ep)
-            except TopicParsingError as e:
+                topic_name = TopicResourceManifest._get_topic_name_from_locations(
+                    ep.locations
+                )
+                topic_resrc_info = TopicResourceInfo._from_flight_endpoint(ep)
+            except TopicManifestError as e:
                 logger.error(f"Skipping invalid topic endpoint, err: '{e}'")
                 continue
             # Skip topics with no data
             if (
-                topic_resrc_mdata.timestamp_ns_min is None
-                or topic_resrc_mdata.timestamp_ns_max is None
+                topic_resrc_info.timestamp_ns_min is None
+                or topic_resrc_info.timestamp_ns_max is None
             ):
                 continue
             # If not in the selected topics
-            if topics and topic_resrc_mdata.topic_name not in topics:
+            if topics and topic_name not in topics:
                 continue
             treader = TopicDataStreamer._connect_from_ticket(
                 client=client,
-                topic_name=topic_resrc_mdata.topic_name,
+                topic_name=topic_name,
                 ticket=ep.ticket,
             )
             # Cache the topic reader instance

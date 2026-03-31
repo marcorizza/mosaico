@@ -7,3 +7,5 @@ The following data models are specific to the ROS bridge and are not part of the
 
 ::: mosaicolabs.ros_bridge.data_ontology.BatteryState
 ::: mosaicolabs.ros_bridge.data_ontology.FrameTransform
+::: mosaicolabs.ros_bridge.data_ontology.PointCloud2
+::: mosaicolabs.ros_bridge.data_ontology.PointField

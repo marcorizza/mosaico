@@ -4,5 +4,6 @@ description: API Reference for Communication Module
 ---
 
 ::: mosaicolabs.comm.MosaicoClient
-::: mosaicolabs.comm.NotifyType
-::: mosaicolabs.comm.Notified
+::: mosaicolabs.comm.NotificationType
+::: mosaicolabs.comm.Notification
+::: mosaicolabs.comm.middlewares

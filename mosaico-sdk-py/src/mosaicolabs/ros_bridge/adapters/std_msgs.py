@@ -16,26 +16,27 @@ Architecture:
     in the ROSBridge.
 """
 
-from typing import Any, Dict, Optional, Type, Tuple
+from typing import Any, Dict, Optional, Tuple, Type
+
+from mosaicolabs.models import Message, Serializable
 from mosaicolabs.models.data import (
+    Boolean,
     Floating32,
     Floating64,
-    Integer64,
-    String,
     Integer8,
     Integer16,
     Integer32,
-    Boolean,
+    Integer64,
+    String,
+    Unsigned8,
     Unsigned16,
     Unsigned32,
     Unsigned64,
-    Unsigned8,
 )
-from mosaicolabs.models import Message, Serializable
 
 from ..adapter_base import ROSAdapterBase
-from ..ros_message import ROSMessage, ROSHeader
-from ..ros_bridge import register_adapter
+from ..ros_bridge import register_default_adapter
+from ..ros_message import ROSMessage
 from .helpers import _validate_msgdata
 
 # ---------------------------------------------------------------------------
@@ -103,7 +104,7 @@ class GenericStdAdapter(ROSAdapterBase[Serializable]):
     1.  **Injected** with a specific `ros_msgtype` (e.g., `"std_msgs/msg/String"`).
     2.  **Injected** with a specific target `__mosaico_ontology_type__` (e.g., `String`).
     3.  **Registered** automatically in the [`ROSBridge`][mosaicolabs.ros_bridge.ROSBridge]
-        using the `@register_adapter` mechanism.
+        using the `@register_default_adapter` mechanism.
 
     ### "Adaptation" Strategy
     Following the philosophy of **"Adaptation, Not Just Parsing,"** these adapters do
@@ -191,4 +192,4 @@ for ros_type, msco_type in _ROS_MSGTYPE_MSCO_BASE_TYPE_MAP.items():
 
     # Register the new class with the global adapter registry
     # This makes it available to the ROS Bridge for automatic resolution.
-    register_adapter(new_adapter_cls)
+    register_default_adapter(new_adapter_cls)

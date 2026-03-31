@@ -1,5 +1,6 @@
 use super::{Format, TimestampRange};
-use crate::{params, traits};
+use super::{SessionManifest, Uuid};
+use crate::{params, traits, types};
 use std::path;
 use thiserror::Error;
 
@@ -7,35 +8,66 @@ use thiserror::Error;
 // RESOURCE
 // ////////////////////////////////////////////////////////////////////////////
 
-pub struct ResourceId {
+/// Represents the unique identifiers of a record.
+pub struct Identifiers {
+    /// The internal, numeric ID of the resource (e.g., a database primary key).
     pub id: i32,
-    pub uuid: uuid::Uuid,
+    /// The universally unique identifier (UUID) for the resource.
+    pub uuid: Uuid,
 }
 
+pub enum IdLookup {
+    Id(i32),
+    Uuid(Uuid),
+}
+
+impl std::fmt::Display for IdLookup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(id) => write!(f, "id:{}", id),
+            Self::Uuid(uuid) => write!(f, "uuid:{}", uuid),
+        }
+    }
+}
+
+/// Defines the different ways a resource (topic, sequence and sessions) can be looked up.
+pub enum ResourceLookup {
+    /// Lookup by the internal numeric ID.
+    Id(i32),
+    /// Lookup by its unique string locator (e.g., `my/sequence/my/topic`).
+    Locator(String),
+    /// Lookup by its universally unique identifier.
+    Uuid(Uuid),
+}
+
+impl std::fmt::Display for ResourceLookup {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Id(id) => write!(f, "id:{}", id),
+            Self::Uuid(uuid) => write!(f, "uuid:{}", uuid),
+            Self::Locator(locator) => write!(f, "locator:{}", locator),
+        }
+    }
+}
+
+/// Enumerates the types of resources available in Mosaico.
 pub enum ResourceType {
+    /// A resource that represents a collection of related topics.
     Sequence,
+    /// A resource that represents a stream of data.
     Topic,
 }
 
 #[derive(Debug, Error)]
 pub enum ResourceError {
-    #[error("error encoding resource to url :: {0}")]
+    #[error("error encoding resource to url")]
     UrlError(#[from] url::ParseError),
 }
 
 pub trait Resource: std::fmt::Display + Send + Sync {
-    fn name(&self) -> &String;
+    fn locator(&self) -> &str;
 
     fn resource_type(&self) -> ResourceType;
-
-    /// Returns the location of the metadata file associated with the resource.
-    ///
-    /// The metadata file may or may not exists, no check if performed by this function.
-    fn path_metadata(&self) -> path::PathBuf {
-        let mut path = path::Path::new(self.name()).join("metadata");
-        path.set_extension(params::ext::JSON);
-        path
-    }
 
     /// Return the URL representing the resource
     /// For now the URL is without authority.
@@ -44,17 +76,26 @@ pub trait Resource: std::fmt::Display + Send + Sync {
     /// `mosaico:/sequence_name/topic/subtopic/sensor`
     fn url(&self) -> Result<url::Url, ResourceError> {
         let schema = params::MOSAICO_URL_SCHEMA;
-        let path = self.name();
+        let path = self.locator();
         Ok(url::Url::parse(&format!("{schema}:/{path}"))?)
     }
 
-    /// Return the path of the resource
-    fn path(&self) -> &path::Path {
-        path::Path::new(self.name())
+    fn is_sub_resource(&self, parent: &dyn Resource) -> bool {
+        self.locator().starts_with(parent.locator())
     }
 
-    fn is_sub_resource(&self, parent: &dyn Resource) -> bool {
-        self.name().starts_with(parent.name())
+    /// Return the resource path
+    ///
+    /// # Example
+    /// ```txt, ignore
+    /// sequence/my/topic
+    /// ```
+    /// or
+    /// ```txt, ignore
+    /// sequence
+    /// ```
+    fn path(&self) -> &path::Path {
+        path::Path::new(self.locator())
     }
 }
 
@@ -62,9 +103,15 @@ pub trait Resource: std::fmt::Display + Send + Sync {
 // TOPIC
 // ////////////////////////////////////////////////////////////////////////////
 
+/// Uniquely identifies a topic resource and an optional time-based filter.
+///
+/// This locator combines a string-based path (`locator`) with an optional
+/// [`TimestampRange`] to specify a subset of data within the topic.
 #[derive(Default, Debug, Clone)]
 pub struct TopicResourceLocator {
+    /// The unique string identifier for the topic (e.g., `my/sequence/my/topic`).
     locator: String,
+    /// An optional time range to filter data within the topic.
     pub timestamp_range: Option<TimestampRange>,
 }
 
@@ -74,31 +121,59 @@ impl TopicResourceLocator {
         self
     }
 
+    /// Returns the filename of the data file.
+    ///
+    /// The data file is composed as follows:
+    /// ```txt,ignore
+    /// data-[chunk_number].[extension]
+    /// ```
+    pub fn data_file(chunk_number: usize, extension: &dyn traits::AsExtension) -> String {
+        format!(
+            "data-{chunk_number:05}.{ext}",
+            ext = extension.as_extension()
+        )
+    }
+
     pub fn into_parts(self) -> (String, Option<TimestampRange>) {
         (self.locator, self.timestamp_range)
     }
 
+    /// Returns the complete path of a specific data file.
+    ///
+    /// # Example
+    /// ```txt, ignore
+    /// sequence/my/topic/2sr5g/data-0000.parquet
+    /// ```
     pub fn path_data(
         &self,
+        uuid: &Uuid,
         chunk_number: usize,
         extension: &dyn traits::AsExtension,
     ) -> path::PathBuf {
-        let filename = format!("data-{:05}", chunk_number);
-        let mut path = path::Path::new(self.name()).join(filename);
+        let filename = Self::data_file(chunk_number, extension);
+        self.path_data_folder(uuid).join(filename)
+    }
 
-        path.set_extension(extension.as_extension());
+    /// Return the complete path of the folder contianing all data
+    ///
+    /// # Example
+    /// ```txt, ignore
+    /// sequence/my/topic/2sr5g
+    /// ```
+    pub fn path_data_folder(&self, uuid: &Uuid) -> path::PathBuf {
+        let cropped_uuid: String = uuid.non_hyphened_string().chars().take(5).collect();
 
-        path
+        self.path().join(format!("data:{cropped_uuid}"))
     }
 
     /// Return the full path of the manifest file
     pub fn path_manifest(&self) -> path::PathBuf {
-        path::Path::new(self.name()).join("manifest.json")
+        path::Path::new(self.locator()).join("manifest.json")
     }
 }
 
 impl Resource for TopicResourceLocator {
-    fn name(&self) -> &String {
+    fn locator(&self) -> &str {
         &self.locator
     }
 
@@ -121,11 +196,7 @@ where
 
 impl std::fmt::Display for TopicResourceLocator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if let Some(ts) = &self.timestamp_range {
-            write!(f, "[topic|{}|{}]", self.locator, ts)
-        } else {
-            write!(f, "[topic|{}]", self.locator)
-        }
+        write!(f, "{}", self.locator)
     }
 }
 
@@ -135,20 +206,51 @@ impl From<TopicResourceLocator> for String {
     }
 }
 
-#[derive(Debug)]
-pub struct TopicMetadata<M> {
-    pub properties: TopicProperties,
-    pub user_metadata: M,
+impl AsRef<str> for TopicResourceLocator {
+    fn as_ref(&self) -> &str {
+        self.locator.as_ref()
+    }
 }
 
-impl<M> TopicMetadata<M> {
-    pub fn new(props: TopicProperties, user_metadata: M) -> Self
+#[derive(Debug)]
+pub struct TopicOntologyProperties {
+    pub serialization_format: Format,
+    pub ontology_tag: String,
+}
+
+/// Properties defining the data semantic and encoding for a topic.
+#[derive(Debug)]
+pub struct TopicOntologyMetadata<M> {
+    pub properties: TopicOntologyProperties,
+    pub user_metadata: Option<M>,
+}
+
+impl<M> TopicOntologyMetadata<M> {
+    pub fn new(props: TopicOntologyProperties, user_metadata: Option<M>) -> Self
     where
         M: super::MetadataBlob,
     {
         Self {
             properties: props,
             user_metadata,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct TopicManifest<M> {
+    pub properties: TopicProperties,
+    pub ontology_metadata: TopicOntologyMetadata<M>,
+}
+
+impl<M> TopicManifest<M> {
+    pub fn new(properties: TopicProperties, ontology_metadata: TopicOntologyMetadata<M>) -> Self
+    where
+        M: super::MetadataBlob,
+    {
+        Self {
+            properties,
+            ontology_metadata,
         }
     }
 }
@@ -160,18 +262,32 @@ pub struct TopicChunksStats {
     pub total_row_count: i64,
 }
 
-/// Configuration properties defining the data semantic and encoding for a topic.
+/// Metadata properties associated to a topic.
 #[derive(Debug)]
 pub struct TopicProperties {
-    pub serialization_format: Format,
-    pub ontology_tag: String,
+    pub created_at: types::Timestamp,
+    pub completed_at: Option<types::Timestamp>,
+    pub locked: bool,
+    pub session_uuid: Uuid,
+    pub resource_locator: TopicResourceLocator,
 }
 
 impl TopicProperties {
-    pub fn new(serialization_format: Format, ontology_tag: String) -> Self {
+    pub fn new(resource_locator: TopicResourceLocator, session_uuid: Uuid) -> Self {
+        Self::new_with_created_at(resource_locator, session_uuid, types::Timestamp::now())
+    }
+
+    pub fn new_with_created_at(
+        resource_locator: TopicResourceLocator,
+        session_uuid: Uuid,
+        created_at: types::Timestamp,
+    ) -> Self {
         Self {
-            serialization_format,
-            ontology_tag,
+            locked: false,
+            resource_locator,
+            created_at,
+            completed_at: None,
+            session_uuid,
         }
     }
 }
@@ -180,65 +296,48 @@ impl TopicProperties {
 ///
 /// This struct provides a snapshot of the topic's physical state on disk, including
 /// its size, structure, and lifecycle status.
-pub struct TopicSystemInfo {
+#[derive(Debug)]
+pub struct TopicDataInfo {
     /// Number of chunks in the topic
-    pub chunks_number: usize,
-    /// True is the topic is currently locked, a topic is locked if
-    /// some data was uploaded and the connection was closed gracefully
-    ///
-    /// # Note
-    /// (cabba) TODO: evaluate move this into a separate function since is not strictly related to system info
-    pub is_locked: bool,
+    pub chunks_number: u64,
     /// Total size in bytes of the data.
     /// Metadata and other system files are excluded in the count.
-    pub total_size_bytes: usize,
-    /// Datetime of the topic creation
-    pub created_datetime: super::DateTime,
-}
-
-/// Metadata generated during topic consolidation.
-///
-/// This manifest aggregates all topic details once the write process is finalized.
-#[derive(Default)]
-pub struct TopicManifest {
-    pub timestamp: Option<TopicManifestTimestamp>,
-}
-
-impl TopicManifest {
-    /// Generates an empty topic manifest
-    pub fn new() -> Self {
-        Self {
-            ..Default::default()
-        }
-    }
-
-    pub fn with_timestamp(mut self, timestamp: TopicManifestTimestamp) -> Self {
-        self.timestamp = Some(timestamp);
-        self
-    }
-}
-
-/// Timestamp statistics for the topic index.
-pub struct TopicManifestTimestamp {
-    /// Timestamp range observed (min and max) in this topic
-    pub range: super::TimestampRange,
-}
-
-impl TopicManifestTimestamp {
-    pub fn new(range: super::TimestampRange) -> Self {
-        Self { range }
-    }
+    pub total_bytes: u64,
+    /// First and last timestamps present in the topic data.
+    pub timestamp_range: TimestampRange,
 }
 
 // ////////////////////////////////////////////////////////////////////////////
 // SEQUENCE
 // ////////////////////////////////////////////////////////////////////////////
 
+/// Uniquely identifies a sequence resource.
+///
+/// A sequence acts as a container for a collection of related topics. This locator
+/// is a sanitized, path-like string (e.g., `my/sequence`) that provides a
+/// human-readable and stable identifier for the sequence.
 #[derive(Debug, Clone)]
 pub struct SequenceResourceLocator(String);
 
+impl SequenceResourceLocator {
+    pub fn session_manifest(&self, uuid: &super::Uuid) -> std::path::PathBuf {
+        std::path::PathBuf::from(self.0.clone())
+            .join(format!("session-{}", uuid))
+            .with_extension(params::ext::JSON)
+    }
+
+    /// Returns the location of the metadata file associated with the sequence.
+    ///
+    /// The metadata file may or may not exists, no check if performed by this function.
+    pub fn path_metadata(&self) -> path::PathBuf {
+        let mut path = path::Path::new(self.locator()).join("metadata");
+        path.set_extension(params::ext::JSON);
+        path
+    }
+}
+
 impl Resource for SequenceResourceLocator {
-    fn name(&self) -> &String {
+    fn locator(&self) -> &str {
         &self.0
     }
 
@@ -258,13 +357,19 @@ where
 
 impl std::fmt::Display for SequenceResourceLocator {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[sequence|{}]", self.0)
+        write!(f, "{}", self.0)
     }
 }
 
 impl From<SequenceResourceLocator> for String {
     fn from(value: SequenceResourceLocator) -> String {
         value.0
+    }
+}
+
+impl AsRef<str> for SequenceResourceLocator {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
     }
 }
 
@@ -284,16 +389,11 @@ where
     }
 }
 
-pub struct SequenceSystemInfo {
-    /// Total size in bytes of the data.
-    /// This values includes additional system files.
-    pub total_size_bytes: usize,
-    /// True is the sequence is locked, a sequence is locked if
-    /// all its topics are locked and the `sequence_finalize` action
-    /// was called.
-    pub is_locked: bool,
-    /// Datetime of the sequence creation
-    pub created_datetime: super::DateTime,
+pub struct SequenceManifest {
+    /// Timestamp of the sequence creation
+    pub created_at: super::Timestamp,
+    pub resource_locator: SequenceResourceLocator,
+    pub sessions: Vec<SessionManifest>,
 }
 
 // ////////////////////////////////////////////////////////////////////////////
@@ -357,12 +457,12 @@ impl SequenceTopicGroupSet {
 
         groups
             .0
-            .sort_unstable_by(|a, b| a.sequence.name().cmp(b.sequence.name()));
+            .sort_unstable_by(|a, b| a.sequence.locator().cmp(b.sequence.locator()));
 
         for mut self_grp in self.0 {
-            let found = groups
-                .0
-                .binary_search_by(|grp_aux| grp_aux.sequence.name().cmp(self_grp.sequence.name()));
+            let found = groups.0.binary_search_by(|grp_aux| {
+                grp_aux.sequence.locator().cmp(self_grp.sequence.locator())
+            });
 
             if let Ok(found) = found {
                 self_grp.topics.extend(groups.0[found].topics.clone());
@@ -370,8 +470,8 @@ impl SequenceTopicGroupSet {
                 // Sort and remove duplicates
                 self_grp
                     .topics
-                    .sort_unstable_by(|a, b| a.name().cmp(b.name()));
-                self_grp.topics.dedup_by(|a, b| a.name() == b.name());
+                    .sort_unstable_by(|a, b| a.locator().cmp(b.locator()));
+                self_grp.topics.dedup_by(|a, b| a.locator() == b.locator());
 
                 result.push(self_grp);
             }
@@ -498,7 +598,7 @@ mod tests {
         dbg!(&merged);
 
         assert_eq!(merged.len(), 1);
-        assert_eq!(merged[0].sequence.name(), "sequence_1");
+        assert_eq!(merged[0].sequence.locator(), "sequence_1");
         assert_eq!(merged[0].topics.len(), 3);
     }
 }

@@ -27,6 +27,68 @@ In a mixed ingestion scenario, the source file provides a serialized stream of r
 
 As the reader iterates through the file, Mosaico dynamically assigns each record to its corresponding "lane" (Topic Writer).
 
+??? info "Generating Sample Data (Optional)"
+
+    If you want to follow along and run the code in this guide, you can generate the `mission_data.mcap` sample file using the following Python script. Make sure you have the `mcap` Python package installed (`pip install mcap`).
+    
+    ```python title="mcap_gen.py"
+    import time
+    import json
+    from mcap.writer import Writer
+    
+    def generate_mission_mcap(output_path: str):
+        with open(output_path, "wb") as f:
+            writer = Writer(f)
+            writer.start()
+    
+            # 1. Register Schema (define data type name, must correspond to Mosaico script)
+            imu_schema = writer.register_schema(name="sensor_msgs/msg/Imu", encoding="jsonschema", data=b"{}")
+            gps_schema = writer.register_schema(name="sensor_msgs/msg/NavSatFix", encoding="jsonschema", data=b"{}")
+            press_schema = writer.register_schema(name="sensor_msgs/msg/FluidPressure", encoding="jsonschema", data=b"{}")
+    
+            # 2. Register Channel (define Topic path)
+            imu_chan = writer.register_channel(topic="/sensors/imu", message_encoding="json", schema_id=imu_schema)
+            gps_chan = writer.register_channel(topic="/sensors/gps", message_encoding="json", schema_id=gps_schema)
+            press_chan = writer.register_channel(topic="/sensors/baro", message_encoding="json", schema_id=press_schema)
+    
+            # 3. Simulate data generation loop (generate 10 data)
+            start_time_ns = time.time_ns()
+            
+            for i in range(10):
+                current_time_ns = start_time_ns + (i * 100_000_000) # Every 0.1 seconds
+                sec = current_time_ns // 1_000_000_000
+                nanosec = current_time_ns % 1_000_000_000
+    
+                # --- Simulate IMU data ---
+                imu_payload = {
+                    "header": {"stamp": {"sec": sec, "nanosec": nanosec}},
+                    "linear_acceleration": {"x": 0.01 * i, "y": 0.02, "z": 9.81},
+                    "angular_velocity": {"x": 0.0, "y": 0.0, "z": 0.01}
+                }
+                writer.add_message(imu_chan, log_time=current_time_ns, data=json.dumps(imu_payload).encode(), publish_time=current_time_ns)
+    
+                # --- Simulate GPS data ---
+                gps_payload = {
+                    "header": {"stamp": {"sec": sec, "nanosec": nanosec}},
+                    "latitude": 25.04, "longitude": 121.53, "altitude": 10.5,
+                    "status": {"status": 1, "service": 1}
+                }
+                writer.add_message(gps_chan, log_time=current_time_ns, data=json.dumps(gps_payload).encode(), publish_time=current_time_ns)
+    
+                # --- Simulate Pressure data ---
+                press_payload = {
+                    "header": {"stamp": {"sec": sec, "nanosec": nanosec}},
+                    "fluid_pressure": 101325.0 - (i * 10)
+                }
+                writer.add_message(press_chan, log_time=current_time_ns, data=json.dumps(press_payload).encode(), publish_time=current_time_ns)
+    
+            writer.finish()
+            print(f"Successfully generated MCAP file: {output_path}")
+    
+    if __name__ == "__main__":
+        generate_mission_mcap("mission_data.mcap")
+    ```
+
 
 ### Step 1: Implementing the Custom Translator and Adapters
 
@@ -39,14 +101,15 @@ from mosaicolabs.models import (IMU,
                                 Vector3d, 
                                 GPSStatus, 
                                 Time, 
-                                Serializable)
+                                Serializable,
+                                Point3d)
 
 def custom_translator(schema_name: str, payload: dict):
     if schema_name == "sensor_msgs/msg/Imu":
         header = payload['header']
         timestamp_ns = Time(
-            sec=header['stamp']['sec'], 
-            nanosec=header['stamp']['nanosec']
+            seconds=header['stamp']['sec'], 
+            nanoseconds=header['stamp']['nanosec']
         ).to_nanoseconds()
         return Message(
             timestamp_ns=timestamp_ns,
@@ -59,13 +122,13 @@ def custom_translator(schema_name: str, payload: dict):
     if schema_name == "sensor_msgs/msg/NavSatFix":
         header = payload['header']
         timestamp_ns = Time(
-            sec=header['stamp']['sec'], 
-            nanosec=header['stamp']['nanosec']
+            seconds=header['stamp']['sec'], 
+            nanoseconds=header['stamp']['nanosec']
         ).to_nanoseconds()
         return Message(
             timestamp_ns=timestamp_ns,
             data=GPS(
-                position=Vector3d(
+                position=Point3d(
                     x=payload['latitude'], 
                     y=payload['longitude'], 
                     z=payload['altitude']
@@ -80,8 +143,8 @@ def custom_translator(schema_name: str, payload: dict):
     if schema_name == "sensor_msgs/msg/FluidPressure":
         header = payload['header']
         timestamp_ns = Time(
-            sec=header['stamp']['sec'], 
-            nanosec=header['stamp']['nanosec']
+            seconds=header['stamp']['sec'], 
+            nanoseconds=header['stamp']['nanosec']
         ).to_nanoseconds()
         return Message(
             timestamp_ns=timestamp_ns,
@@ -110,10 +173,9 @@ The Mosaico [`Message`][mosaicolabs.models.Message] object is an in-memory objec
 
 In this specific case, the data are instances of the [`IMU`][mosaicolabs.models.sensors.IMU], [`GPS`][mosaicolabs.models.sensors.GPS] and [`Pressure`][mosaicolabs.models.sensors.Pressure] models. These are built-in parts of the Mosaico default ontology, meaning the platform already understands their schema and how to optimize their storage.
 
-For a more in-depth explanation:
-
-* **[Documentation: Data Models & Ontology](../ontology.md)**
-* **[API Reference: Sensor Models](../API_reference/models/sensors.md)**
+??? question "In Depth Explanation"
+    * **[Documentation: Data Models & Ontology](../ontology.md)**
+    * **[API Reference: Sensor Models](../API_reference/models/sensors.md)**
 
 ### Step 2: Orchestrating the Multi-Topic Interleaved Ingestion
 
@@ -124,21 +186,23 @@ When initializing your data handling pipeline, it is highly recommended to wrap 
 
 ```python title="Connect to the Mosaico server and create a sequence writer"
 from mcap.reader import make_reader
-from mosaicolabs import MosaicoClient, OnErrorPolicy, Message
+from mosaicolabs import MosaicoClient, SessionLevelErrorPolicy, Message
 
 with open("mission_data.mcap", "rb") as f:
     reader = make_reader(f)
+    setup_sdk_logging(level="INFO", pretty=True) # Configure the mosaico logging
+    
     with MosaicoClient.connect("localhost", 6726) as client:
         with client.sequence_create(
             sequence_name="multi_sensor_ingestion",
             metadata={"mission": "alpha_test", "environment": "laboratory"},
-            on_error=OnErrorPolicy.Delete # (1)!
+            on_error=SessionLevelErrorPolicy.Report # (1)!
         ) as swriter:
             # Steps 3 and 4 (Topic Creation & Pushing) happen here...
 
 ```
 
-1. Mosaico supports two distinct error policies for sequences: `OnErrorPolicy.Delete` and `OnErrorPolicy.Report`.
+1. Mosaico supports two distinct error policies for sequences: `SessionLevelErrorPolicy.Delete` and `SessionLevelErrorPolicy.Report`. See [The Writing Workflow](../handling/writing.md#sequence-level-error-handling).
 
 !!! warning "Context Management"
     It is **mandatory** to use the `SequenceWriter` instance returned by `client.sequence_create()` inside its own `with` context. The following code will raise an exception:
@@ -155,12 +219,11 @@ with open("mission_data.mcap", "rb") as f:
 
 #### Sequence-Level Error Handling
 
-The behavior of the orchestrator during a failure is governed by the `on_error` policy. This is a *Last-Resort* automated error policy, which dictates how the server manages a sequence if an unhandled exception bubbles up to the `SequenceWriter` context manager. By default, this is set to [`OnErrorPolicy.Delete`][mosaicolabs.enum.OnErrorPolicy.Delete], which signals the server to physically remove the incomplete sequence and its associated topic directories, if any errors occurred. Alternatively, you can specify [`OnErrorPolicy.Report`][mosaicolabs.enum.OnErrorPolicy.Report]: in this case, the SDK will not delete the data but will instead send an error notification to the server, allowing the platform to flag the sequence as failed while retaining whatever records were successfully transmitted before the error occurred.
+The behavior of the orchestrator during a failure is governed by the `on_error` policy. This is a *Last-Resort* automated error policy, which dictates how the server manages a sequence if an unhandled exception bubbles up to the `SequenceWriter` context manager. By default, this is set to [`SessionLevelErrorPolicy.Report`][mosaicolabs.enum.SessionLevelErrorPolicy.Report], send an error notification to the server, allowing the platform to flag the sequence as failed while retaining whatever records were successfully transmitted before the error occurred. Alternatively, you can specify [`SessionLevelErrorPolicy.Delete`][mosaicolabs.enum.SessionLevelErrorPolicy.Delete]: in this case, the SDK will signal the server to physically remove the incomplete sequence and its associated topic directories, if any errors occurred.
 
-For a more in-depth explanation:
-
-* **[Documentation: The Writing Workflow](../handling/writing.md)**
-* **[API Reference: Writing Data](../API_reference/handlers/writing.md)**
+??? question "In Depth Explanation"
+    * **[Documentation: The Writing Workflow](../handling/writing.md)**
+    * **[API Reference: Writing Data](../API_reference/handlers/writing.md)**
 
 ### Step 3: Topic Creation and Resource Allocation
 
@@ -184,43 +247,46 @@ with client.sequence_create(...) as swriter:
             twriter = swriter.topic_create( # (2)!
                 topic_name=channel.topic,
                 metadata={},
-                ontology_type=ontology_type
+                ontology_type=ontology_type,
+                on_error=TopicLevelErrorPolicy.Finalize # (3)!
             )
 ```
 
 1. Here we are checking if the a `TopicWriter` for the current topic already exists.
 2. Here we are creating the topic writer for the current topic, if it doesn't exist yet.
+3. Here we are setting the error policy for the current topic. In this case, if an error occurs, the topic writer will **signal the error to the server and finalize the topic. Further writes to this topic will raise an error**.
 
+#### Topic-Level Error Management
+
+In the code snippet above, we implemented a **Controlled Ingestion** by wrapping the topic-specific processing and pushing logic within a local `with twriter:` block.
+Because the `SequenceWriter` cannot natively distinguish which specific topic failed within your custom processing code (such as a coordinate transformation), an unhandled exception will bubble up and trigger the global sequence-level error policy. In this way, we can keep ingesting data from the other topics even if one single topic fails.
 
 ### Step 4: Pushing Data into the Pipeline
 
 The final stage of the ingestion process involves iterating through your data generators and transmitting records to the Mosaico platform by calling the [`TopicWriter.push()`][mosaicolabs.handlers.TopicWriter.push] method for each record. The `push()` method optimizes the throughput by accumulating messages into internal batches.
 
 ```python
-        try:
-            # In a real scenario, use a deserializer like mcap_ros2.decoder
-            raw_data = deserialize_payload(message.data, schema.name) # (1)!
-            mosaico_msg = custom_translator(schema.name, raw_data)
+        if twriter.is_active: # (1)!
+            with twriter: # (2)!
+                # In a real scenario, use a deserializer like mcap_ros2.decoder
+                raw_data = deserialize_payload(message.data, schema.name) # (3)!
+                mosaico_msg = custom_translator(schema.name, raw_data)
 
-            if mosaico_msg is None:
-                # Log and skip, or raise if incomplete data is disallowed
-                print("Skipping row due to parsing error")
-                continue # Ignore malformed records
+                if mosaico_msg is None:
+                    # Log and skip, or raise if incomplete data is disallowed
+                    print("Skipping row due to parsing error")
+                    continue # Ignore malformed records
             
-            twriter.push(message=mosaico_msg)
-        except Exception as e:
-            print(f"Skip error on {channel.topic} at {message.log_time}: {e}")
-
+                twriter.push(message=mosaico_msg) # (4)!
+            if twriter.status == TopicWriterStatus.FinalizedWithError
+                print(f"Writer for topic {twriter.name} prematurely finalized due to error: '{twriter.last_error}'")
 ```
 
-1. This is an example of a custom function that deserializes the payload of the current message.
-
-#### Topic-Level Error Management
-
-In the code snippet above, we implemented a **Controlled Ingestion** by wrapping the topic-specific processing and pushing logic within a local `try-except` block.
-Because the `SequenceWriter` cannot natively distinguish which specific topic failed within your custom processing code (such as a coordinate transformation), an unhandled exception will bubble up and trigger the global sequence-level error policy. To avoid this, you should catch errors locally for each topic.
-
-Upcoming versions of the SDK will introduce native **Topic-Level Error Policies**. This feature will allow you to define the error behavior directly when creating the topic, removing the need for boilerplate `try-except` blocks around every sensor stream.
+1. We check this because [`on_error=TopicLevelErrorPolicy.Finalize`][mosaicolabs.enum.TopicLevelErrorPolicy.Finalize]: the topic writer could have been closed, if an error occurred in a previous iteration.
+    By doing this, we avoid wasting resources by processing and pushing data into a closed topic writer.
+2. Protect the topic-related executions: in this way the `TopicWriter` can correctly handle the errors in this block, by implementing the topic-level error policy.
+3. This is an example of a custom function that deserializes the payload of the current message.
+4. This function raises if the `TopicWriter` is not active. See [`TopicWriter.push`][mosaicolabs.handlers.TopicWriter.push].
 
 
 ## The full example code
@@ -229,18 +295,27 @@ Upcoming versions of the SDK will introduce native **Topic-Level Error Policies*
 """
 Import the necessary classes from the Mosaico SDK.
 """
+"""
+Import the necessary classes from the Mosaico SDK.
+"""
 from mcap.reader import make_reader
 
 from mosaicolabs import (
     MosaicoClient, # The gateway to the Mosaico Platform
-    OnErrorPolicy, # The error policy for the SequenceWriter
+    setup_sdk_logging, # The mosaico logging config
+    SessionLevelErrorPolicy, # The error policy for the SequenceWriter
+    TopicLevelErrorPolicy, # The error policy for the TopicWriter
     Message, # The base class for all data messages
     IMU, # The IMU sensor data class
     Vector3d, # The 3D vector class, needed to populate the IMU and GPS data
     GPS, # The GPS sensor data class
     GPSStatus, # The GPS status enum, needed to populate the GPS data
     Pressure, # The Pressure sensor data class
+    Time, # The Time class, needed to populate the IMU and GPS data
+    Point3d, # The 3D point class, needed to populate the GPS data
+    Serializable # The Serializable class
 )
+from typing import Optional, Type
 
 """
 Define the generator functions that yield `Message` objects.
@@ -251,8 +326,8 @@ def custom_translator(schema_name: str, payload: dict):
     if schema_name == "sensor_msgs/msg/Imu":
         header = payload['header']
         timestamp_ns = Time(
-            sec=header['stamp']['sec'], 
-            nanosec=header['stamp']['nanosec']
+            seconds=header['stamp']['sec'], 
+            nanoseconds=header['stamp']['nanosec']
         ).to_nanoseconds()
         return Message(
             timestamp_ns=timestamp_ns,
@@ -265,13 +340,13 @@ def custom_translator(schema_name: str, payload: dict):
     if schema_name == "sensor_msgs/msg/NavSatFix":
         header = payload['header']
         timestamp_ns = Time(
-            sec=header['stamp']['sec'], 
-            nanosec=header['stamp']['nanosec']
+            seconds=header['stamp']['sec'], 
+            nanoseconds=header['stamp']['nanosec']
         ).to_nanoseconds()
         return Message(
             timestamp_ns=timestamp_ns,
             data=GPS(
-                position=Vector3d(
+                position=Point3d(
                     x=payload['latitude'], 
                     y=payload['longitude'], 
                     z=payload['altitude']
@@ -286,8 +361,8 @@ def custom_translator(schema_name: str, payload: dict):
     if schema_name == "sensor_msgs/msg/FluidPressure":
         header = payload['header']
         timestamp_ns = Time(
-            sec=header['stamp']['sec'], 
-            nanosec=header['stamp']['nanosec']
+            seconds=header['stamp']['sec'], 
+            nanoseconds=header['stamp']['nanosec']
         ).to_nanoseconds()
         return Message(
             timestamp_ns=timestamp_ns,
@@ -307,17 +382,33 @@ def determine_mosaico_type(schema_name: str) -> Optional[Type["Serializable"]]:
         return Pressure
     return None
 
+
+# Example helper function
+def deserialize_payload(data: bytes, schema_name: str) -> dict:
+    """
+    Decode the binary data in MCAP into a Python dictionary.
+    """
+    try:
+        import json
+        return json.loads(data.decode("utf-8"))
+    except Exception as e:
+        print(f"decode error: {e}")
+        return {}
+
+
 """
 Main ingestion orchestration
 """
 def main():
+    setup_sdk_logging(level="INFO", pretty=True) # Configure the mosaico logging
+
     with open("mission_data.mcap", "rb") as f:
         reader = make_reader(f)
         with MosaicoClient.connect("localhost", 6726) as client:
             with client.sequence_create(
                 sequence_name="multi_sensor_ingestion",
                 metadata={"mission": "alpha_test", "environment": "laboratory"},
-                on_error=OnErrorPolicy.Delete
+                on_error=SessionLevelErrorPolicy.Delete
             ) as swriter:
                 # Iterate through all interleaved messages
                 for schema, channel, message in reader.iter_messages():
@@ -335,24 +426,31 @@ def main():
                         twriter = swriter.topic_create(
                             topic_name=channel.topic,
                             metadata={},
-                            ontology_type=ontology_type
+                            ontology_type=ontology_type,
+                            on_error=TopicLevelErrorPolicy.Ignore,
                         )
 
                     # 2. Defensive Ingestion: Isolate errors to this specific record
-                    try:
-                        # In a real scenario, use a deserializer like mcap_ros2.decoder
-                        raw_data = deserialize_payload(message.data, schema.name) # Example helper function
-                        mosaico_msg = custom_translator(schema.name, raw_data)
+                    if twriter.is_active: # (1)!
+                        with twriter:
+                            # In a real scenario, use a deserializer like mcap_ros2.decoder
+                            raw_data = deserialize_payload(message.data, schema.name) # Example helper function
+                            mosaico_msg = custom_translator(schema.name, raw_data)
 
-                        if mosaico_msg is None:
-                            # Log and skip, or raise if incomplete data is disallowed
-                            print("Skipping row due to parsing error")
-                            continue # Ignore malformed records
-                        
-                        twriter.push(message=mosaico_msg)
-                    except Exception as e:
-                        print(f"Skip error on {channel.topic} at {message.log_time}: {e}")
+                            if mosaico_msg is None:
+                                # Log and skip, or raise if incomplete data is disallowed
+                                print("Skipping row due to parsing error")
+                                continue # Ignore malformed records
+                            
+                            twriter.push(message=mosaico_msg)
+                        # Inspect premature finalization
+                        if twriter.status == TopicWriterStatus.FinalizedWithError
+                            print(f"Writer for topic {twriter.name} prematurely finalized due to error: '{twriter.last_error}'")
+```
 
         # All buffers are flushed and the sequence is committed when exiting the SequenceWriter 'with' block
         print("Multi-topic ingestion completed!")
+
+if __name__ == "__main__":
+    main()
 ```

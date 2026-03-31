@@ -1,15 +1,17 @@
 import fnmatch
+from enum import Enum
 from pathlib import Path
-from mosaicolabs.logging_config import get_logger
+from typing import Dict, Generator, List, Optional, Tuple, Union
+
 from rosbags.highlevel import AnyReader
 from rosbags.interfaces import Connection, TopicInfo
-from typing import Dict, Generator, List, Optional, Tuple, Union
-from enum import Enum
 from rosbags.typesys import Stores, get_typestore
 
+from mosaicolabs.logging_config import get_logger
+
 from .helpers import _to_dict
-from .ros_bridge import ROSMessage
 from .registry import ROSTypeRegistry
+from .ros_bridge import ROSMessage
 
 # Set the hierarchical logger
 logger = get_logger(__name__)
@@ -223,6 +225,21 @@ class ROSLoader:
         except StopIteration:
             logger.error(f"Topic '{topic}' not found in the loaded connections.")
             return 0
+
+    @property
+    def duration(self) -> int:
+        """
+        Returns the duration of the bag file in nanoseconds.
+
+        Returns:
+            int: The duration of the bag file in nanoseconds.
+        """
+        self._resolve_connections()
+        if not self._reader:
+            raise ValueError(
+                "Loader not initialized. Call .open() or use as context manager first."
+            )
+        return self._reader.duration
 
     @property
     def topics(self) -> List[str]:

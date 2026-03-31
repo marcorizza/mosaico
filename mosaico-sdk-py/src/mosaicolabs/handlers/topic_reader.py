@@ -6,17 +6,21 @@ from a single topic via the Flight `DoGet` protocol.
 """
 
 import json
-from mosaicolabs.handlers.endpoints import TopicParsingError, TopicResourceManifest
-from mosaicolabs.models.message import Message
-import pyarrow.flight as fl
-import pyarrow as pa
 from typing import Any, Optional
 
-from .internal.topic_read_state import _TopicReadState
+import pyarrow as pa
+import pyarrow.flight as fl
 
-from ..comm.metadata import TopicMetadata, _decode_metadata
+from mosaicolabs.models.message import Message
+from mosaicolabs.platform.metadata import TopicMetadata, _decode_schema_metadata
+from mosaicolabs.platform.resource_manifests import (
+    TopicManifestError,
+    TopicResourceManifest,
+)
+
 from ..helpers.helpers import pack_topic_resource_name
 from ..logging_config import get_logger
+from .internal.topic_read_state import _TopicReadState
 
 # Set the hierarchical logger
 logger = get_logger(__name__)
@@ -122,6 +126,7 @@ class TopicDataStreamer:
 
         Raises:
             ConnectionError: If the server fails to open the `do_get` stream.
+            ValueError: If errors when decoding schema metadata
         """
         # Initialize the Flight stream (DoGet)
         try:
@@ -132,7 +137,9 @@ class TopicDataStreamer:
             )
 
         # Decode metadata to determine how to deserialize the data
-        topic_mdata = TopicMetadata.from_dict(_decode_metadata(reader.schema.metadata))
+        topic_mdata = TopicMetadata._from_decoded_schema_metadata(
+            _decode_schema_metadata(reader.schema.metadata)
+        )
         ontology_tag = topic_mdata.properties.ontology_tag
 
         rdstate = _TopicReadState(
@@ -194,11 +201,13 @@ class TopicDataStreamer:
             )
         for ep in flight_info.endpoints:
             try:
-                topic_resrc_mdata = TopicResourceManifest.from_flight_endpoint(ep)
-            except TopicParsingError as e:
+                tname = TopicResourceManifest._get_topic_name_from_locations(
+                    ep.locations
+                )
+            except TopicManifestError as e:
                 logger.error(f"Skipping invalid topic endpoint, err: '{e}'")
                 continue
-            if topic_resrc_mdata.topic_name == topic_name:
+            if tname == topic_name:
                 return cls._connect_from_ticket(
                     client=client,
                     topic_name=topic_name,

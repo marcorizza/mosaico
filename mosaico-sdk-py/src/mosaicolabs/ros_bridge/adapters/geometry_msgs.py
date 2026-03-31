@@ -8,26 +8,26 @@ spatial data is normalized before ingestion.
 """
 
 from typing import Any, Optional, Tuple, Type
+
+from mosaicolabs.models import Message
 from mosaicolabs.models.data import (
+    Acceleration,
+    ForceTorque,
     Point3d,
     Pose,
     Quaternion,
     Transform,
     Vector3d,
-    ForceTorque,
-    Acceleration,
     Velocity,
 )
-from mosaicolabs.models import Message
 
 from ..adapter_base import ROSAdapterBase
+from ..ros_bridge import register_default_adapter
 from ..ros_message import ROSMessage
-from ..ros_bridge import register_adapter
-
-from .helpers import _make_header, _validate_msgdata
+from .helpers import _validate_msgdata
 
 
-@register_adapter
+@register_default_adapter
 class PoseAdapter(ROSAdapterBase[Pose]):
     """
     Adapter for translating ROS Pose-related messages to Mosaico `Pose`.
@@ -107,7 +107,7 @@ class PoseAdapter(ROSAdapterBase[Pose]):
         -  **Leaf Node**: At the base level, map 'position' and 'orientation' to
            [`Point3d`][mosaicolabs.models.data.Point3d] and
            [`Quaternion`][mosaicolabs.models.data.Quaternion].
-        -  **Metadata Binding**: Headers and covariances are attached during
+        -  **Metadata Binding**: Covariances are attached during
            recursion unwinding.
 
         Example:
@@ -148,7 +148,6 @@ class PoseAdapter(ROSAdapterBase[Pose]):
             out_pose = cls.from_dict(pose_dict)
 
             # While unwinding recursion, attach metadata found at this level
-            out_pose.header = _make_header(ros_data.get("header"))
             out_pose.covariance = ros_data.get("covariance")
             return out_pose
 
@@ -161,7 +160,7 @@ class PoseAdapter(ROSAdapterBase[Pose]):
             )
 
 
-@register_adapter
+@register_default_adapter
 class TwistAdapter(ROSAdapterBase[Velocity]):
     """
     Adapter for translating ROS Twist-related messages to Mosaico `Velocity`.
@@ -237,7 +236,7 @@ class TwistAdapter(ROSAdapterBase[Velocity]):
         -  **Recurse**: If a 'twist' key is found, dive deeper into the structure.
         -  **Leaf Node**: At the base level, map 'linear' and 'angular' to
            [`Vector3`][mosaicolabs.models.data.geometry.Vector3d].
-        -  **Metadata Binding**: Headers and covariances are attached during
+        -  **Metadata Binding**: Covariances are attached during
            recursion unwinding.
 
         Example:
@@ -277,7 +276,6 @@ class TwistAdapter(ROSAdapterBase[Velocity]):
             out_twist = cls.from_dict(twist_dict)
 
             # Apply metadata from wrapper levels
-            out_twist.header = _make_header(ros_data.get("header"))
             out_twist.covariance = ros_data.get("covariance")
             return out_twist
 
@@ -295,7 +293,7 @@ class TwistAdapter(ROSAdapterBase[Velocity]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class AccelAdapter(ROSAdapterBase[Acceleration]):
     """
     Adapter for translating ROS Accel-related messages to Mosaico `Acceleration`.
@@ -367,7 +365,7 @@ class AccelAdapter(ROSAdapterBase[Acceleration]):
         -  **Recurse**: If a 'accel' key is found, dive deeper into the structure.
         -  **Leaf Node**: At the base level, map 'linear' and 'angular' to
            [`Vector3`][mosaicolabs.models.data.geometry.Vector3d].
-        -  **Metadata Binding**: Headers and covariances are attached during
+        -  **Metadata Binding**: Covariances are attached during
            recursion unwinding.
 
         Example:
@@ -407,7 +405,6 @@ class AccelAdapter(ROSAdapterBase[Acceleration]):
             out_accel = cls.from_dict(accel_dict)
 
             # Apply metadata from wrapper levels
-            out_accel.header = _make_header(ros_data.get("header"))
             out_accel.covariance = ros_data.get("covariance")
             return out_accel
 
@@ -425,7 +422,7 @@ class AccelAdapter(ROSAdapterBase[Acceleration]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class Vector3Adapter(ROSAdapterBase[Vector3d]):
     """
     Adapter for translating ROS Vector3 messages to Mosaico [`Vector3d`][mosaicolabs.models.data.Vector3d].
@@ -489,8 +486,6 @@ class Vector3Adapter(ROSAdapterBase[Vector3d]):
         -  **Recurse**: If a 'vector' key is found, dive deeper into the structure.
         -  **Leaf Node**: At the base level, map 'x', 'y' and 'z' to
            [`Vector3d`][mosaicolabs.models.data.Vector3d].
-        -  **Metadata Binding**: Headers and covariances are attached during
-           recursion unwinding.
 
         Example:
             ```python
@@ -525,7 +520,6 @@ class Vector3Adapter(ROSAdapterBase[Vector3d]):
             out_vec3 = cls.from_dict(vec3_dict)
 
             # Apply metadata
-            out_vec3.header = _make_header(ros_data.get("header"))
             return out_vec3
 
         # Base Case: Leaf node
@@ -542,7 +536,7 @@ class Vector3Adapter(ROSAdapterBase[Vector3d]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class PointAdapter(ROSAdapterBase[Point3d]):
     """
     Adapter for translating ROS Point messages to Mosaico `Point3d`.
@@ -606,8 +600,6 @@ class PointAdapter(ROSAdapterBase[Point3d]):
             -  **Recurse**: If a 'point' key is found, dive deeper into the structure.
             -  **Leaf Node**: At the base level, map 'x', 'y' and 'z' to
                [`Point3d`][mosaicolabs.models.data.Point3d].
-            -  **Metadata Binding**: Headers and covariances are attached during
-               recursion unwinding.
 
         Example:
             ```python
@@ -642,7 +634,6 @@ class PointAdapter(ROSAdapterBase[Point3d]):
             out_point = cls.from_dict(point_dict)
 
             # Apply metadata
-            out_point.header = _make_header(ros_data.get("header"))
             return out_point
 
         # Base Case: Leaf node
@@ -659,7 +650,7 @@ class PointAdapter(ROSAdapterBase[Point3d]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class QuaternionAdapter(ROSAdapterBase[Quaternion]):
     """
     Adapter for translating ROS Quaternion messages to Mosaico `Quaternion`.
@@ -723,8 +714,6 @@ class QuaternionAdapter(ROSAdapterBase[Quaternion]):
             -  **Recurse**: If a 'quaternion' key is found, dive deeper into the structure.
             -  **Leaf Node**: At the base level, map 'x', 'y', 'z' and 'w' to
                [`Quaternion`][mosaicolabs.models.data.Quaternion].
-            -  **Metadata Binding**: Headers and covariances are attached during
-               recursion unwinding.
 
         Example:
             ```python
@@ -759,7 +748,6 @@ class QuaternionAdapter(ROSAdapterBase[Quaternion]):
             out_quat = cls.from_dict(quat_dict)
 
             # Apply metadata
-            out_quat.header = _make_header(ros_data.get("header"))
             return out_quat
 
         # Base Case: Leaf node
@@ -777,15 +765,15 @@ class QuaternionAdapter(ROSAdapterBase[Quaternion]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class TransformAdapter(ROSAdapterBase[Transform]):
     """
     Adapter for translating ROS Transform messages to Mosaico `Transform`.
 
     **Supported ROS Types:**
 
-    - [`geometry_msgs/msg/TransformStamped`](https://docs.ros2.org/foxy/api/geometry_msgs/msg/TransformStamped.html)
     - [`geometry_msgs/msg/Transform`](https://docs.ros2.org/foxy/api/geometry_msgs/msg/Transform.html)
+    - [`geometry_msgs/msg/TransformStamped`](https://docs.ros2.org/foxy/api/geometry_msgs/msg/TransformStamped.html)
 
     **Recursive Unwrapping Strategy:**
     The adapter checks for nested `'transform'` keys. If found (as in `TransformStamped`), it recurses to the leaf node while collecting metadata like headers and
@@ -842,8 +830,6 @@ class TransformAdapter(ROSAdapterBase[Transform]):
             -  **Recurse**: If a 'transform' key is found, dive deeper into the structure.
             -  **Leaf Node**: At the base level, map 'translation' and 'rotation' to
                [`Transform`][mosaicolabs.models.data.Transform].
-            -  **Metadata Binding**: Headers and covariances are attached during
-               recursion unwinding.
 
         Example:
             ```python
@@ -878,7 +864,6 @@ class TransformAdapter(ROSAdapterBase[Transform]):
             out_transf = cls.from_dict(transf_dict)
 
             # Apply metadata
-            out_transf.header = _make_header(ros_data.get("header"))
             out_transf.target_frame_id = ros_data.get("child_frame_id")
             return out_transf
 
@@ -896,7 +881,7 @@ class TransformAdapter(ROSAdapterBase[Transform]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class WrenchAdapter(ROSAdapterBase[ForceTorque]):
     """
     Adapter for translating ROS Wrench messages to Mosaico `ForceTorque`.
@@ -961,8 +946,6 @@ class WrenchAdapter(ROSAdapterBase[ForceTorque]):
             -  **Recurse**: If a 'wrench' key is found, dive deeper into the structure.
             -  **Leaf Node**: At the base level, map 'force' and 'torque' to
                [`ForceTorque`][mosaicolabs.models.data.ForceTorque].
-            -  **Metadata Binding**: Headers and covariances are attached during
-               recursion unwinding.
 
         Example:
             ```python
@@ -988,7 +971,6 @@ class WrenchAdapter(ROSAdapterBase[ForceTorque]):
             out_ft = cls.from_dict(wrench_dict)
 
             # Apply metadata
-            out_ft.header = _make_header(ros_data.get("header"))
             return out_ft
 
         # Base Case: Leaf node

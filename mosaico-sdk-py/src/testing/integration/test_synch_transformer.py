@@ -1,20 +1,22 @@
-from mosaicolabs.comm import MosaicoClient
-from mosaicolabs.ml import DataFrameExtractor, SyncTransformer
 import numpy as np
 import pytest
+
+from mosaicolabs.comm import MosaicoClient
+from mosaicolabs.ml import DataFrameExtractor, SyncTransformer
 from testing.integration.config import (
-    UPLOADED_SEQUENCE_NAME,
-    UPLOADED_IMU_FRONT_TOPIC,
     UPLOADED_GPS_TOPIC,
+    UPLOADED_IMU_FRONT_TOPIC,
+    UPLOADED_SEQUENCE_NAME,
 )
+
 from .helpers import SequenceDataStream
 
 
 def test_invalid_timestamp_column(
-    _client: MosaicoClient,
-    _inject_sequence_data_stream,  # Make sure data are available on the server
+    mosaico_client: MosaicoClient,
+    inject_synthetic_sequence,  # Make sure data are available on the server
 ):
-    seqhandler = _client.sequence_handler(UPLOADED_SEQUENCE_NAME)
+    seqhandler = mosaico_client.sequence_handler(UPLOADED_SEQUENCE_NAME)
     # Sequence must exist
     assert seqhandler is not None
     # --- Topic 1 ---
@@ -27,17 +29,17 @@ def test_invalid_timestamp_column(
             _ = stransformer.transform(chunk)
 
     # free resources
-    _client.close()
+    mosaico_client.close()
 
 
 def test_sync_unbounded(
-    _client: MosaicoClient,
-    _make_sequence_data_stream: SequenceDataStream,  # Get the data stream for comparisons
-    _inject_sequence_data_stream,  # Make sure data are available on the server
+    mosaico_client: MosaicoClient,
+    synthetic_sequence_data_stream: SequenceDataStream,  # Get the data stream for comparisons
+    inject_synthetic_sequence,  # Make sure data are available on the server
 ):
     """Test retrieving the topic data-stream from start to end, unbounded"""
 
-    seqhandler = _client.sequence_handler(UPLOADED_SEQUENCE_NAME)
+    seqhandler = mosaico_client.sequence_handler(UPLOADED_SEQUENCE_NAME)
     # Sequence must exist
     assert seqhandler is not None
     # --- Topic 1 ---
@@ -47,12 +49,12 @@ def test_sync_unbounded(
 
     imu_tstamps_ns = [
         dstream.msg.timestamp_ns
-        for dstream in _make_sequence_data_stream.items
+        for dstream in synthetic_sequence_data_stream.items
         if dstream.topic == UPLOADED_IMU_FRONT_TOPIC
     ]
     gps_tstamps_ns = [
         dstream.msg.timestamp_ns
-        for dstream in _make_sequence_data_stream.items
+        for dstream in synthetic_sequence_data_stream.items
         if dstream.topic == UPLOADED_GPS_TOPIC
     ]
     min_timestamp_ns = min(imu_tstamps_ns[0], gps_tstamps_ns[0])
@@ -75,11 +77,12 @@ def test_sync_unbounded(
                 synched_df.columns.str.contains("position")
                 | synched_df.columns.str.contains("acceleration")
             )
-            & ~synched_df.columns.str.contains("header")
-            & ~synched_df.columns.str.contains("covariance")
+            & ~synched_df.columns.str.contains("_id")
+            & ~synched_df.columns.str.contains("recording_timestamp_ns")
+            & ~synched_df.columns.str.contains("variance")
         )
         selected = synched_df.loc[:, val_cols]
         # For every column in val_cols, there exists at least one non-NaN value.
         assert selected.notna().any().all()
     # free resources
-    _client.close()
+    mosaico_client.close()

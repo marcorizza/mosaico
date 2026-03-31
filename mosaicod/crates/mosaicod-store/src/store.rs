@@ -7,9 +7,28 @@ use futures::stream::TryStreamExt;
 use log::trace;
 use mosaicod_core::{params, traits};
 use object_store::{ObjectStore, PutPayload, aws::AmazonS3Builder, local::LocalFileSystem};
+use parquet::arrow::async_reader::ParquetObjectReader;
 use std::sync::Arc;
 use thiserror::Error;
 use url::Url;
+
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("storage backend error")]
+    BackendError(#[from] object_store::Error),
+    #[error("bad url")]
+    BadUrl(#[from] url::ParseError),
+    #[error("io error")]
+    IoError(#[from] std::io::Error),
+    #[error("unable to configure object store: missing {0}")]
+    BadConfiguration(String),
+}
+
+impl Error {
+    pub fn bad_configuration(field: &str) -> Self {
+        Self::BadConfiguration(field.to_owned())
+    }
+}
 
 /// Converts a filesystem path to an object_store Path.
 #[inline]
@@ -27,14 +46,23 @@ pub struct S3Config {
     pub secret_key: params::Hidden,
 }
 
-#[derive(Error, Debug)]
-pub enum Error {
-    #[error("storage backend error: {0}")]
-    BackendError(#[from] object_store::Error),
-    #[error("bad url: {0}")]
-    BadUrl(#[from] url::ParseError),
-    #[error("io error :: {0}")]
-    IoError(#[from] std::io::Error),
+impl S3Config {
+    /// Returns an error is the configuration contains empty fields.
+    pub fn validate(&self) -> Result<(), Error> {
+        if self.bucket.is_empty() {
+            return Err(Error::bad_configuration("bucket"));
+        }
+        if self.endpoint.is_empty() {
+            return Err(Error::bad_configuration("endpoint"));
+        }
+        if self.access_key.is_empty() {
+            return Err(Error::bad_configuration("access key"));
+        }
+        if self.secret_key.is_empty() {
+            return Err(Error::bad_configuration("secret key"));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -207,6 +235,10 @@ impl Store {
 
         Ok(())
     }
+
+    pub fn parquet_reader(&self, path: impl AsRef<std::path::Path>) -> ParquetObjectReader {
+        ParquetObjectReader::new(self.driver.clone(), to_object_path(path))
+    }
 }
 
 impl traits::AsyncWriteToPath for Store {
@@ -271,7 +303,7 @@ pub mod testing {
         /// The store's directory will be automatically deleted when the [`Store`] is dropped.
         /// The directory name is based on the current timestamp.
         pub fn new_random_on_tmp() -> Result<Self, Box<dyn std::error::Error>> {
-            let random_location = format!("/tmp/{}", mosaicod_core::random::random_string(10));
+            let random_location = format!("/tmp/{}", mosaicod_core::random::alphabetic(10));
             Self::new(random_location)
         }
     }

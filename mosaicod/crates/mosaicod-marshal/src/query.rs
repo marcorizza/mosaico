@@ -230,8 +230,8 @@ fn convert_user_metadata(
 
 #[derive(Debug, Deserialize)]
 struct Sequence {
-    name: Option<Op>,
-    created_timestamp: Option<Op>,
+    locator: Option<Op>,
+    created_at_ns: Option<Op>,
     user_metadata: Option<HashMap<String, Op>>,
 }
 
@@ -239,18 +239,20 @@ impl TryInto<query::SequenceFilter> for Sequence {
     type Error = query::Error;
     fn try_into(self) -> Result<query::SequenceFilter, Self::Error> {
         Ok(query::SequenceFilter {
-            name: self.name.map(|v| v.try_into()).transpose().map_err(|e| {
-                Self::Error::OpError {
-                    field: "sequence.name".to_owned(),
-                    err: e,
-                }
-            })?,
-            creation: self
-                .created_timestamp
+            name: self
+                .locator
                 .map(|v| v.try_into())
                 .transpose()
                 .map_err(|e| Self::Error::OpError {
-                    field: "sequence.created_timestamp".to_owned(),
+                    field: "sequence.locator".to_owned(),
+                    err: e,
+                })?,
+            created_at: self
+                .created_at_ns
+                .map(|v| v.try_into())
+                .transpose()
+                .map_err(|e| Self::Error::OpError {
+                    field: "sequence.created_at".to_owned(),
                     err: e,
                 })?,
             user_metadata: convert_user_metadata(self.user_metadata)?,
@@ -260,8 +262,8 @@ impl TryInto<query::SequenceFilter> for Sequence {
 
 #[derive(Debug, Deserialize)]
 pub struct Topic {
-    name: Option<Op>,
-    created_timestamp: Option<Op>,
+    locator: Option<Op>,
+    created_at_ns: Option<Op>,
     ontology_tag: Option<Op>,
     serialization_format: Option<Op>,
     user_metadata: Option<HashMap<String, Op>>,
@@ -272,19 +274,21 @@ impl TryInto<query::TopicFilter> for Topic {
 
     fn try_into(self) -> Result<query::TopicFilter, Self::Error> {
         Ok(query::TopicFilter {
-            name: self.name.map(|v| v.try_into()).transpose().map_err(|e| {
-                Self::Error::OpError {
-                    field: "topic.name".to_owned(),
-                    err: e,
-                }
-            })?,
-
-            creation: self
-                .created_timestamp
+            name: self
+                .locator
                 .map(|v| v.try_into())
                 .transpose()
                 .map_err(|e| Self::Error::OpError {
-                    field: "topic.created_timestamp".to_owned(),
+                    field: "topic.locator".to_owned(),
+                    err: e,
+                })?,
+
+            created_at: self
+                .created_at_ns
+                .map(|v| v.try_into())
+                .transpose()
+                .map_err(|e| Self::Error::OpError {
+                    field: "topic.created_at".to_owned(),
                     err: e,
                 })?,
 

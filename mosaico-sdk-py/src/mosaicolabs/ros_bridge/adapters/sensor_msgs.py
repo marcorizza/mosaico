@@ -1,30 +1,30 @@
 from typing import Any, List, Optional, Tuple, Type
-from mosaicolabs.models.data import Point3d, Vector2d, ROI
+
 from mosaicolabs.models import Message
+from mosaicolabs.models.data import ROI, Point3d, Vector2d
 from mosaicolabs.models.sensors import (
-    CameraInfo,
     GPS,
-    GPSStatus,
-    NMEASentence,
-    CompressedImage,
-    Image,
     IMU,
+    CameraInfo,
+    CompressedImage,
+    GPSStatus,
+    Image,
+    NMEASentence,
     RobotJoint,
 )
 
+from ..adapter_base import ROSAdapterBase
+from ..data_ontology import BatteryState, PointCloud2, PointField
+from ..ros_bridge import register_default_adapter
+from ..ros_message import ROSMessage
 from .geometry_msgs import (
     QuaternionAdapter,
     Vector3Adapter,
 )
-from ..data_ontology import BatteryState
-from ..ros_message import ROSMessage
-from ..adapter_base import ROSAdapterBase
-from ..ros_bridge import register_adapter
-
-from .helpers import _make_header, _validate_msgdata
+from .helpers import _validate_msgdata
 
 
-@register_adapter
+@register_default_adapter
 class CameraInfoAdapter(ROSAdapterBase[CameraInfo]):
     """
     Adapter for translating ROS CameraInfo messages to Mosaico `CameraInfo`.
@@ -141,7 +141,6 @@ class CameraInfoAdapter(ROSAdapterBase[CameraInfo]):
 
         # Manage differences between ROS1 and ROS2s
         return CameraInfo(
-            header=_make_header(ros_data.get("header")),
             height=ros_data["height"],
             width=ros_data["width"],
             binning=Vector2d(
@@ -255,7 +254,7 @@ class NavSatStatusAdapter(ROSAdapterBase[GPSStatus]):
         return schema_mdata if schema_mdata else None
 
 
-@register_adapter
+@register_default_adapter
 class GPSAdapter(ROSAdapterBase[GPS]):
     """
     Adapter for translating ROS NavSatFix messages to Mosaico `GPS`.
@@ -338,7 +337,6 @@ class GPSAdapter(ROSAdapterBase[GPS]):
         _validate_msgdata(cls, ros_data)
 
         return GPS(
-            header=_make_header(ros_data.get("header")),
             position=Point3d(
                 x=ros_data["latitude"],
                 y=ros_data["longitude"],
@@ -371,7 +369,7 @@ class GPSAdapter(ROSAdapterBase[GPS]):
         return schema_mdata if schema_mdata else None
 
 
-@register_adapter
+@register_default_adapter
 class IMUAdapter(ROSAdapterBase[IMU]):
     """
     Adapter for translating ROS Imu messages to Mosaico `IMU`.
@@ -496,7 +494,6 @@ class IMUAdapter(ROSAdapterBase[IMU]):
             angular_vel.covariance = ros_data.get("angular_velocity_covariance")
 
         return IMU(
-            header=_make_header(ros_data.get("header")),
             acceleration=accel,
             angular_velocity=angular_vel,
             orientation=orientation,
@@ -510,7 +507,7 @@ class IMUAdapter(ROSAdapterBase[IMU]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class NMEASentenceAdapter(ROSAdapterBase[NMEASentence]):
     """
     Adapter for translating ROS NMEASentence messages to Mosaico `NMEASentence`.
@@ -576,10 +573,7 @@ class NMEASentenceAdapter(ROSAdapterBase[NMEASentence]):
             NMEASentence: The constructed Mosaico NMEASentence object.
         """
         _validate_msgdata(cls, ros_data)
-        return NMEASentence(
-            header=_make_header(ros_data.get("header")),
-            sentence=ros_data["sentence"],
-        )
+        return NMEASentence(sentence=ros_data["sentence"])
 
     @classmethod
     def schema_metadata(cls, ros_data: dict, **kwargs: Any) -> Optional[dict]:
@@ -589,7 +583,7 @@ class NMEASentenceAdapter(ROSAdapterBase[NMEASentence]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class ImageAdapter(ROSAdapterBase[Image]):
     """
     Adapter for translating ROS Image messages to Mosaico `Image`.
@@ -673,7 +667,6 @@ class ImageAdapter(ROSAdapterBase[Image]):
         _validate_msgdata(cls, ros_data)
 
         return Image.from_linear_pixels(
-            header=_make_header(ros_data.get("header")),
             data=ros_data["data"],
             # if .get is None, the encode function will use a default format internally
             format=kwargs.get("output_format"),
@@ -692,7 +685,7 @@ class ImageAdapter(ROSAdapterBase[Image]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class CompressedImageAdapter(ROSAdapterBase[CompressedImage]):
     """
     Adapter for translating ROS CompressedImage messages to Mosaico `CompressedImage`.
@@ -767,11 +760,7 @@ class CompressedImageAdapter(ROSAdapterBase[CompressedImage]):
         """
         _validate_msgdata(cls, ros_data)
 
-        return CompressedImage(
-            header=_make_header(ros_data.get("header")),
-            data=bytes(ros_data["data"]),
-            format=ros_data["format"],
-        )
+        return CompressedImage(data=bytes(ros_data["data"]), format=ros_data["format"])
 
     @classmethod
     def schema_metadata(cls, ros_data: dict, **kwargs: Any) -> Optional[dict]:
@@ -781,7 +770,7 @@ class CompressedImageAdapter(ROSAdapterBase[CompressedImage]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class ROIAdapter(ROSAdapterBase[ROI]):
     """
     Adapter for translating ROS RegionOfInterest messages to Mosaico `ROI`.
@@ -873,7 +862,7 @@ class ROIAdapter(ROSAdapterBase[ROI]):
         return None
 
 
-@register_adapter
+@register_default_adapter
 class BatteryStateAdapter(ROSAdapterBase[BatteryState]):
     """
     Adapter for translating ROS BatteryState messages to Mosaico `BatteryState`.
@@ -988,7 +977,6 @@ class BatteryStateAdapter(ROSAdapterBase[BatteryState]):
         _validate_msgdata(cls, ros_data)
 
         return BatteryState(
-            header=_make_header(ros_data.get("header")),
             voltage=ros_data["voltage"],
             temperature=ros_data["temperature"],
             current=ros_data["current"],
@@ -1028,7 +1016,7 @@ class BatteryStateAdapter(ROSAdapterBase[BatteryState]):
         return schema_mdata if schema_mdata else None
 
 
-@register_adapter
+@register_default_adapter
 class RobotJointAdapter(ROSAdapterBase[RobotJoint]):
     """
     Adapter for translating ROS JointState messages to Mosaico `RobotJoint`.
@@ -1109,11 +1097,135 @@ class RobotJointAdapter(ROSAdapterBase[RobotJoint]):
         """
         _validate_msgdata(cls, ros_data)
         return RobotJoint(
-            header=_make_header(ros_data.get("header")),
             names=ros_data["name"],
             positions=ros_data["position"],
             velocities=ros_data["velocity"],
             efforts=ros_data["effort"],
+        )
+
+    @classmethod
+    def schema_metadata(cls, ros_data: dict, **kwargs: Any) -> Optional[dict]:
+        """
+        Extract the ROS message specific schema metadata, if any.
+        """
+        return None
+
+
+@register_default_adapter
+class PointCloudAdapter(ROSAdapterBase[PointCloud2]):
+    """
+        Adapter for translating ROS PointCloud2 messages to Mosaico `PointCloud2`.
+
+        **Supported ROS Types:**
+
+        - [`sensor_msgs/msg/PointCloud2`](https://docs.ros2.org/foxy/api/sensor_msgs/msg/PointCloud2.html)
+
+        Example:
+        ```python
+            ros_msg = ROSMessage(
+                timestamp=17000,
+                topic="/point_cloud",
+                msg_type="sensor_msgs/PointCloud2",
+                data={
+                    "height": 1,
+                    "width": 3,
+                    "fields": [
+                        {"name": "x", "offset": 0,  "datatype": 7, "count": 1},
+                        {"name": "y", "offset": 4,  "datatype": 7, "count": 1},
+                        {"name": "z", "offset": 8,  "datatype": 7, "count": 1},
+                    ],
+                    "is_bigendian": False,
+                    "point_step": 12,
+                    "row_step": 36,
+                    "data": b'\x00\x00\x80\x3f'  # x=1.0
+                            b'\x00\x00\x00\x40'  # y=2.0
+                            b'\x00\x00\x40\x40'  # z=3.0
+                            b'\x00\x00\x80\x3f'  # x=1.0
+                            b'\x00\x00\x00\x40'  # y=2.0
+                            b'\x00\x00\x40\x40'  # z=3.0
+                            b'\x00\x00\x80\x3f'  # x=1.0
+                            b'\x00\x00\x00\x40'  # y=2.0
+                            b'\x00\x00\x40\x40', # z=3.0
+                    "is_dense": True,
+                }
+            )
+            # Automatically resolves to a flat Mosaico PointCloud2 with attached metadata
+            mosaico_point_cloud = PointCloudAdapter.translate(ros_msg)
+    ```
+    """
+
+    ros_msgtype: str | Tuple[str, ...] = "sensor_msgs/msg/PointCloud2"
+
+    __mosaico_ontology_type__: Type[PointCloud2] = PointCloud2
+    _REQUIRED_KEYS = (
+        "height",
+        "width",
+        "fields",
+        "is_bigendian",
+        "point_step",
+        "row_step",
+        "data",
+        "is_dense",
+    )
+
+    @classmethod
+    def translate(
+        cls,
+        ros_msg: ROSMessage,  # ROSMessage
+        **kwargs: Any,
+    ) -> Message:
+        return super().translate(ros_msg, **kwargs)
+
+    @classmethod
+    def from_dict(cls, ros_data: dict) -> PointCloud2:
+        """
+        Converts the raw dictionary data into the specific Mosaico type.
+
+        Example:
+            ```python
+            ros_data = {
+                "height": 1,           # unorganized point cloud = 1 row
+                "width": 3,            # 3 points
+                "fields": [
+                    {
+                        "name": "x",
+                        "offset": 0,
+                        "datatype": 7,  # FLOAT32
+                        "count": 1
+                    },
+                    {
+                        "name": "y",
+                        "offset": 4,
+                        "datatype": 7,  # FLOAT32
+                        "count": 1
+                    },
+                    {
+                        "name": "z",
+                        "offset": 8,
+                        "datatype": 7,  # FLOAT32
+                        "count": 1
+                    },
+                ],
+                "is_bigendian": False,
+                "point_step": 12,      # 3 fields * 4 bytes (float32) = 12 bytes per point
+                "row_step": 36,        # point_step * width = 12 * 3 = 36 bytes per row
+                "data": b'\x00\x00\x80\x3f'  # x=1.0
+                        b'\x00\x00\x00\x40'  # y=2.0
+                        b'\x00\x00\x40\x40'  # z=3.0
+            }
+        """
+
+        _validate_msgdata(cls, ros_data)
+
+        return PointCloud2(
+            height=ros_data["height"],
+            width=ros_data["width"],
+            fields=[PointField(**f) for f in ros_data["fields"]],
+            is_bigendian=ros_data["is_bigendian"],
+            point_step=ros_data["point_step"],
+            row_step=ros_data["row_step"],
+            data=bytes(ros_data["data"]),
+            is_dense=ros_data["is_dense"],
         )
 
     @classmethod

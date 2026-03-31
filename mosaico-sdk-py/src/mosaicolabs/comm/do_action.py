@@ -11,17 +11,17 @@ providing stronger typing and validation than raw dictionaries.
 """
 
 import json
-from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-import datetime
-from mosaicolabs.comm.notifications import Notified
+from typing import Any, ClassVar, Dict, Optional, Type, TypeVar
+
 import pyarrow.flight as fl
+
+from mosaicolabs.comm.notifications import Notification
 
 from ..enum import FlightAction
 from ..logging_config import get_logger
-from ..models.query import QueryResponseItem, QueryResponse
-
+from ..models.query import QueryResponse, QueryResponseItem
 
 # Set the hierarchical logger
 logger = get_logger(__name__)
@@ -185,35 +185,17 @@ def _do_action(
 
 
 @dataclass
-class _DoActionResponseKey(_DoActionResponse):
+class _DoActionResponseUUID(_DoActionResponse):
     """Response containing a generated resource key (e.g., after creation)."""
 
     actions: ClassVar[list[FlightAction]] = [
-        FlightAction.SEQUENCE_CREATE,
+        FlightAction.SESSION_CREATE,
         FlightAction.TOPIC_CREATE,
     ]
-    key: str
+    uuid: str
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "_DoActionResponseKey":
-        return cls(**data)
-
-
-@dataclass
-class _DoActionResponseSysInfo(_DoActionResponse):
-    """Response containing system information (size, dates, locks)."""
-
-    actions: ClassVar[list[FlightAction]] = [
-        FlightAction.SEQUENCE_SYSTEM_INFO,
-        FlightAction.TOPIC_SYSTEM_INFO,
-    ]
-    total_size_bytes: int
-    created_datetime: datetime.datetime
-    is_locked: bool
-    chunks_number: Optional[int] = None
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "_DoActionResponseSysInfo":
+    def from_dict(cls, data: Dict[str, Any]) -> "_DoActionResponseUUID":
         return cls(**data)
 
 
@@ -236,20 +218,67 @@ class _DoActionQueryResponse(_DoActionResponse):
 
 
 @dataclass
-class _DoActionNotifyList(_DoActionResponse):
+class _DoActionNotificationList(_DoActionResponse):
     """Response containing a list."""
 
     actions: ClassVar[list[FlightAction]] = [
-        FlightAction.SEQUENCE_NOTIFY_LIST,
-        FlightAction.TOPIC_NOTIFY_LIST,
+        FlightAction.SEQUENCE_NOTIFICATION_LIST,
+        FlightAction.TOPIC_NOTIFICATION_LIST,
     ]
-    notifies: list[Notified]
+    notifications: list[Notification]
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "_DoActionNotifyList":
-        nofifies: Optional[list] = data.get("notifies")
-        if nofifies is None:
-            raise KeyError("Unable to find 'notifies' key in data dict.")
-        return _DoActionNotifyList(
-            notifies=[Notified._from_dict(notify) for notify in nofifies]
+    def from_dict(cls, data: Dict[str, Any]) -> "_DoActionNotificationList":
+        notifications: Optional[list] = data.get("notifications")
+        if notifications is None:
+            raise KeyError("Unable to find 'notifications' key in data dict.")
+        return _DoActionNotificationList(
+            notifications=[
+                Notification._from_dict(notification) for notification in notifications
+            ]
+        )
+
+
+@dataclass
+class _DoActionResponseAPIKeyCreate(_DoActionResponse):
+    """Response returned after creating a new API key.
+
+    This action generates a new API key token with the requested permissions.
+
+    Attributes:
+        api_key_token (str): The plaintext API key returned by the server.
+    """
+
+    actions: ClassVar[list[FlightAction]] = [FlightAction.API_KEY_CREATE]
+    api_key_token: str
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "_DoActionResponseAPIKeyCreate":
+        return cls(api_key_token=data["api_key_token"])
+
+
+@dataclass
+class _DoActionResponseAPIKeyStatus(_DoActionResponse):
+    """Response containing the status and metadata of an existing API key.
+
+    Attributes:
+        api_key_fingerprint (str): Unique identifier of the key.
+        created_at_ns (int): Creation timestamp in nanoseconds since epoch.
+        expires_at_ns (int): Expiration timestamp in nanoseconds since epoch.
+        description (str): Optional description provided at key creation.
+    """
+
+    actions: ClassVar[list[FlightAction]] = [FlightAction.API_KEY_STATUS]
+    api_key_fingerprint: str
+    created_at_ns: int
+    expires_at_ns: Optional[int]
+    description: Optional[str]
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "_DoActionResponseAPIKeyStatus":
+        return cls(
+            api_key_fingerprint=data["api_key_fingerprint"],
+            created_at_ns=data["created_at_ns"],
+            expires_at_ns=data.get("expires_at_ns"),
+            description=data.get("description"),
         )

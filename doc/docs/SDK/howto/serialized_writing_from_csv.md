@@ -30,14 +30,15 @@ When dealing with massive datasets, we adopt a **chunked loading approach** for 
 import pandas as pd
 from mosaicolabs import (
     MosaicoClient, # The gateway to the Mosaico Platform
-    OnErrorPolicy, # The error policy for the SequenceWriter
+    setup_sdk_logging, # The mosaico logging config
+    SessionLevelErrorPolicy, # The error policy for the SequenceWriter
     Message, # The base class for all data messages
     IMU, # The IMU sensor data class
     Vector3d, # The 3D vector class, needed to populate the IMU data
 )
 
-def stream_imu_from_csv(file_path: str, chunk_size: int = 1000):
-    for chunk in pd.read_csv(file_path, chunksize=chunk_size): # (1)!
+def stream_imu_from_csv(file_path: str, chunk_size: int = 1000, skipinitialspace: bool = True):
+    for chunk in pd.read_csv(file_path, chunksize=chunk_size, skipinitialspace=skipinitialspace): # (1)!
         for row in chunk.itertuples(index=False):
             try:
                 yield Message(
@@ -67,10 +68,9 @@ The Mosaico [`Message`][mosaicolabs.models.Message] object is an in-memory objec
 
 In this specific case, the data is an instance of the [`IMU`][mosaicolabs.models.sensors.IMU] model. This is a built-in part of the Mosaico default ontology, meaning the platform already understands its schema and how to optimize its storage.
 
-For a more in-depth explanation:
-
-* **[Documentation: Data Models & Ontology](../ontology.md)**
-* **[API Reference: Sensor Models](../API_reference/models/sensors.md)**
+??? question "In Depth Explanation"
+    * **[Documentation: Data Models & Ontology](../ontology.md)**
+    * **[API Reference: Sensor Models](../API_reference/models/sensors.md)**
 
 ### Step 2: Orchestrating the Sequence Upload
 
@@ -80,18 +80,20 @@ A sequence writer acts as a logical container for related data streams (topics).
 When initializing your data handling pipeline, it is highly recommended to wrap the `MosaicoClient` within a `with` statement. This context manager pattern ensures that underlying network connections and shared resource pools are correctly shut down and released when your operations conclude.
 
 ```python title="Connect to the Mosaico server and create a sequence writer"
+setup_sdk_logging(level="INFO", pretty=True) # Configure the mosaico logging
+
 with MosaicoClient.connect("localhost", 6726) as client:
     # Initialize the Sequence Orchestrator
     with client.sequence_create(
         sequence_name="csv_ingestion_test",
         metadata={"source": "manual_upload", "format": "csv"}
-        on_error = OnErrorPolicy.Delete # (1)!
+        on_error = SessionLevelErrorPolicy.Delete # (1)!
     ) as swriter:
         # Step 3 and 4 happen inside this block...
 
 ```
 
-1. Mosaico supports two distinct error policies for sequences: `OnErrorPolicy.Delete` and `OnErrorPolicy.Report`.
+1. Mosaico supports two distinct error policies for sequences: `SessionLevelErrorPolicy.Delete` and `SessionLevelErrorPolicy.Report`.
 
 !!! warning "Context Management"
     It is **mandatory** to use the `SequenceWriter` instance returned by `client.sequence_create()` inside its own `with` context. The following code will raise an exception:
@@ -108,12 +110,11 @@ with MosaicoClient.connect("localhost", 6726) as client:
 
 #### Sequence-Level Error Handling
 
-The behavior of the orchestrator during a failure is governed by the `on_error` policy. This is a *Last-Resort* automated error policy, which dictates how the server manages a sequence if an unhandled exception bubbles up to the `SequenceWriter` context manager. By default, this is set to [`OnErrorPolicy.Delete`][mosaicolabs.enum.OnErrorPolicy.Delete], which signals the server to physically remove the incomplete sequence and its associated topic directories, if any errors occurred. Alternatively, you can specify [`OnErrorPolicy.Report`][mosaicolabs.enum.OnErrorPolicy.Report]: in this case, the SDK will not delete the data but will instead send an error notification to the server, allowing the platform to flag the sequence as failed while retaining whatever records were successfully transmitted before the error occurred.
+The behavior of the orchestrator during a failure is governed by the `on_error` policy. This is a *Last-Resort* automated error policy, which dictates how the server manages a sequence if an unhandled exception bubbles up to the `SequenceWriter` context manager. By default, this is set to [`SessionLevelErrorPolicy.Report`][mosaicolabs.enum.SessionLevelErrorPolicy.Report], send an error notification to the server, allowing the platform to flag the sequence as failed while retaining whatever records were successfully transmitted before the error occurred. Alternatively, you can specify [`SessionLevelErrorPolicy.Delete`][mosaicolabs.enum.SessionLevelErrorPolicy.Delete]: in this case, the SDK will signal the server to physically remove the incomplete sequence and its associated topic directories, if any errors occurred.
 
-For a more in-depth explanation:
-
-* **[Documentation: The Writing Workflow](../handling/writing.md)**
-* **[API Reference: Writing Data](../API_reference/handlers/writing.md)**
+??? question "In Depth Explanation"
+    * **[Documentation: The Writing Workflow](../handling/writing.md)**
+    * **[API Reference: Writing Data](../API_reference/handlers/writing.md)**
 
 ### Step 3: Topic Creation
 
@@ -168,7 +169,8 @@ Import the necessary classes from the Mosaico SDK.
 import pandas as pd
 from mosaicolabs import (
     MosaicoClient, # The gateway to the Mosaico Platform
-    OnErrorPolicy, # The error policy for the SequenceWriter
+    setup_sdk_logging, # The mosaico logging config
+    SessionLevelErrorPolicy, # The error policy for the SequenceWriter
     Message, # The base class for all data messages
     IMU, # The IMU sensor data class
     Vector3d, # The 3D vector class, needed to populate the IMU data
@@ -177,12 +179,12 @@ from mosaicolabs import (
 """
 Define the generator functions that yield `Message` objects.
 """
-def stream_imu_from_csv(file_path: str, chunk_size: int = 1000):
+def stream_imu_from_csv(file_path: str, chunk_size: int = 1000, skipinitialspace: bool = True):
     """
     Efficiently reads a large CSV in chunks to prevent memory exhaustion.
     """
     # Use pandas TextFileReader to stream the file in chunks
-    for chunk in pd.read_csv(file_path, chunksize=chunk_size):
+    for chunk in pd.read_csv(file_path, chunksize=chunk_size, skipinitialspace=skipinitialspace):
         for row in chunk.itertuples(index=False):
             try:
                 yield Message(
@@ -208,12 +210,14 @@ def stream_imu_from_csv(file_path: str, chunk_size: int = 1000):
 Main ingestion orchestration
 """
 def main():
+    setup_sdk_logging(level="INFO", pretty=True) # Configure the mosaico logging
+
     with MosaicoClient.connect("localhost", 6726) as client:
         # Initialize the Sequence Orchestrator
         with client.sequence_create(
             sequence_name="csv_ingestion_test",
-            metadata={"source": "manual_upload", "format": "csv"}
-            on_error = OnErrorPolicy.Delete # Default
+            metadata={"source": "manual_upload", "format": "csv"},
+            on_error = SessionLevelErrorPolicy.Delete # Default
         ) as swriter:
             # Create a dedicated writer for the IMU topic
             imu_twriter = swriter.topic_create(
@@ -238,4 +242,7 @@ def main():
         print("Successfully injected data from CSV into Mosaico!")
 
     # Here the `MosaicoClient` context and all connections are closed
+
+if __name__ == "__main__":
+    main()
 ```

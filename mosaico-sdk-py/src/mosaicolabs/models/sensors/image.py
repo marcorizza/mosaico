@@ -15,10 +15,10 @@ It provides:
 #   for 'all' the formats, but doing so we are limiting the user from providing custom codecs for more clever extensibility;
 # - (related to previous) Envision the use of codecs, for 'to_image' conversions
 
-from enum import Enum
 import io
 import sys
-from typing import Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 # dependencies for video handling
 import av
@@ -29,8 +29,6 @@ from PIL import Image as PILImage
 from mosaicolabs.enum import SerializationFormat
 from mosaicolabs.logging_config import get_logger
 
-from ..header import Header
-from ..mixins import HeaderMixin
 from ..serializable import Serializable
 
 # Set the hierarchical logger
@@ -38,14 +36,39 @@ logger = get_logger(__name__)
 
 
 class ImageFormat(str, Enum):
-    """Supported containers for image formats."""
+    """
+    Defines the supported encoding and container formats for image data.
+
+    The enum differentiates between **Stateless** formats (independent frames)
+    and **Stateful** formats (video streams with temporal dependencies).
+    """
+
+    # --- Stateless Formats ---
 
     RAW = "raw"
+    """Uncompressed pixel data. Represents a raw buffer of pixels (e.g., RGB, BGR, or Grayscale)."""
+
     PNG = "png"
+    """Portable Network Graphics. A lossless compression format suitable for masks, 
+    overlays, and synthetic data where pixel perfection is required."""
+
     JPEG = "jpeg"
+    """Joint Photographic Experts Group. The standard lossy compression format for 
+    natural images, balancing file size and visual quality."""
+
     TIFF = "tiff"
+    """Tagged Image File Format. Preferred for high-bit depth (16-bit) or 
+    scientific data where metadata preservation is critical."""
+
+    # --- Stateful Formats ---
+
     H264 = "h264"
+    """Advanced Video Coding (AVC). A stateful format using inter-frame compression. 
+    Requires a `StatefulDecodingSession` to maintain temporal context."""
+
     HEVC = "hevc"
+    """High Efficiency Video Coding (H.265). A high-performance stateful format. 
+    Requires a `StatefulDecodingSession` and provides superior compression to H.264."""
 
 
 # Configuration mapping string encodings (transport layer) to Python types (application layer).
@@ -92,7 +115,7 @@ _IMG_ENCODING_MAP: dict = {
 _DEFAULT_IMG_FORMAT = ImageFormat.PNG
 
 
-class Image(Serializable, HeaderMixin):
+class Image(Serializable):
     """
     Represents raw, uncompressed image data.
 
@@ -387,7 +410,6 @@ class Image(Serializable, HeaderMixin):
         height: int,
         width: int,
         encoding: str,
-        header: Optional[Header] = None,
         is_bigendian: Optional[bool] = None,
         format: Optional[ImageFormat] = _DEFAULT_IMG_FORMAT,
     ) -> "Image":
@@ -454,7 +476,6 @@ class Image(Serializable, HeaderMixin):
                 format = ImageFormat.RAW
 
         return cls(
-            header=header,
             data=img_bytes,
             format=format,
             width=width,
@@ -565,7 +586,6 @@ class Image(Serializable, HeaderMixin):
     def from_pillow(
         cls,
         pil_image: PILImage.Image,
-        header: Optional[Header] = None,
         target_encoding: Optional[str] = None,
         output_format: Optional[ImageFormat] = None,
     ) -> "Image":
@@ -581,7 +601,6 @@ class Image(Serializable, HeaderMixin):
 
         Args:
             pil_image (PILImage.Image): Source image.
-            header (Optional[Header]): Metadata.
             target_encoding (Optional[str]): Target pixel format (e.g., "bgr8").
             output_format (Optional[ImageFormat]): ('raw' or 'png').
 
@@ -636,7 +655,6 @@ class Image(Serializable, HeaderMixin):
             encoding=target_encoding,
             height=height,
             is_bigendian=sys.byteorder == "big",
-            header=header,
         )
 
 
@@ -644,7 +662,49 @@ class StatefulDecodingSession:
     """
     Manages the stateful decoding of video streams for a specific reading session.
 
-    NOTE: The image formats supported are: [h264 and hevc]
+    Unlike standard image formats (JPEG/PNG), video encodings like H.264 and HEVC
+    utilize temporal compression (P-frames and B-frames), which require a persistent
+    decoding state (reference frames).
+
+    This class maintains unique `av.CodecContext` instances for each provided
+    context string (typically the `topic_name`), ensuring that interleaved frames
+    from multiple video topics do not interfere with each other.
+
+    Supported Formats:
+        - `ImageFormat.H264`
+        - `ImageFormat.HEVC`
+
+    Example:
+        ```python
+        from mosaicolabs import MosaicoClient, CompressedImage, StatefulDecodingSession
+
+        with MosaicoClient.connect("localhost", 6726) as client:
+            seq_handler = client.sequence_handler("multi_camera_mission")
+
+            # Initialize the session contextually with the data streamer
+            decoding_session = StatefulDecodingSession()
+
+            # Iterate through interleaved topics
+            for topic, msg in seq_handler.get_data_streamer():
+                img = msg.get_data(CompressedImage)
+
+                if img.format in [ImageFormat.H264, ImageFormat.HEVC]:
+                    # Use the session for stateful video decoding
+                    # The 'context' parameter ensures we use the correct reference frames for this topic
+                    pil_img = decoding_session.decode(
+                        img_data=img.data,
+                        format=img.format,
+                        context=topic
+                    )
+                else:
+                    # Use standard stateless decoding for JPEG/PNG
+                    pil_img = img.to_image()
+
+                if pil_img:
+                    pil_img.show()
+
+            decoding_session.close()
+        ```
     """
 
     __suppported_formats__ = [ImageFormat.H264, ImageFormat.HEVC]
@@ -655,21 +715,50 @@ class StatefulDecodingSession:
 
     def decode(
         self,
-        img_data: bytes,
+        *,
+        img_bytes: bytes,
         format: ImageFormat,
         context: str,
     ) -> Optional[PILImage.Image]:
         """
-        Decodes a CompressedImage message into a PIL Image using the
-        persistent state associated with 'topic_name'.
+        Decodes stateful compressed image data (video frames) using a persistent
+        temporal context.
+
+        It utilizes the `context` string to look up or initialize a persistent
+        `av.CodecContext`. This ensures that P-frames and B-frames are correctly
+        applied to the reference frames of their specific stream.
+
+        Args:
+            img_bytes (bytes): The raw compressed binary blob extracted from a
+                `CompressedImage` message.
+            format (ImageFormat): The encoding format. Expected to be a stateful
+                format supported by the session (e.g., `ImageFormat.H264` or
+                `ImageFormat.HEVC`).
+            context (str): A unique identifier for the data stream, typically the
+                `topic_name`. This key isolates the decoding state to prevent
+                memory corruption when frames from multiple sources are
+                interleaved in the same processing loop.
+
+        Returns:
+            Optional[PILImage.Image]:
+                - A `PIL.Image.Image` object containing the decoded frame.
+                - `None` if the format is unsupported, the data is corrupted,
+                  or the frame is a non-visual packet (e.g., internal metadata).
+
+        Note:
+            The first few calls to this method for a new `context` may return
+            `None` if the stream starts with inter-frames (P/B) before hitting
+            an IDR-frame (I-frame/Keyframe).
+
         """
         if format not in self.__suppported_formats__:
+            type_error = [f"'{fmt.value}'" for fmt in self.__suppported_formats__]
             logger.error(
-                f"Input format '{format.value}' not among the supported formats: {[f"'{fmt.value}'" for fmt in self.__suppported_formats__]}"
+                f"Input format '{format.value}' not among the supported formats: {type_error}"
             )
             return None
 
-        return self._decode_video_frame(img_data, format, context)
+        return self._decode_video_frame(img_bytes, format, context)
 
     def _decode_video_frame(
         self,
@@ -716,11 +805,11 @@ class _StatelessDefaultCodec:
     """
 
     def decode(
-        self, data_bytes: bytes, format: ImageFormat
+        self, *, img_bytes: bytes, format: ImageFormat
     ) -> Optional[PILImage.Image]:
         """Decodes bytes using PIL.Image.open."""
         try:
-            image = PILImage.open(io.BytesIO(data_bytes))
+            image = PILImage.open(io.BytesIO(img_bytes))
             image.load()
             return image
         except Exception as e:
@@ -743,13 +832,16 @@ class _StatelessDefaultCodec:
 # --- Data Structure ---
 
 
-class CompressedImage(Serializable, HeaderMixin):
+class CompressedImage(Serializable):
     """
     Represents image data stored as a compressed binary blob (e.g. JPEG, PNG, H264, ...).
 
-    This class acts as a data container. It delegates the complex logic of
-    decoding (bytes -> Image) and encoding (Image -> bytes) to the registered
-    codecs in `_IMG_CODECS_FACTORY`.
+    This class acts as a data container for encoded streams. It distinguishes
+    between:
+    1.  **Stateless Formats (JPEG, PNG, TIFF)**: Can be decoded directly via
+        `.to_image()`.
+    2.  **Stateful Formats (H.264, HEVC)**: Require a `StatefulDecodingSession`
+        to maintain reference frames across multiple messages.
 
     Attributes:
         data (bytes): The compressed binary payload.
@@ -759,22 +851,40 @@ class CompressedImage(Serializable, HeaderMixin):
     This class is fully queryable via the **`.Q` proxy**. You can filter image data based
     on image parameters within a [`QueryOntologyCatalog`][mosaicolabs.models.query.builders.QueryOntologyCatalog].
 
-    Example:
+    Example "Reading H264 `CompressedImage`":
         ```python
-        from mosaicolabs import MosaicoClient, CompressedImage, QueryOntologyCatalog
+        from mosaicolabs import MosaicoClient, CompressedImage, StatefulDecodingSession
 
         with MosaicoClient.connect("localhost", 6726) as client:
-            # Filter for image data based on image parameters
-            qresponse = client.query(
-                QueryOntologyCatalog(CompressedImage.Q.format.eq("jpeg"))
-            )
+            seq_handler = client.sequence_handler("multi_camera_mission")
 
-            # Inspect the response
-            if qresponse is not None:
-                # Results are automatically grouped by Sequence for easier data management
-                for item in qresponse:
-                    print(f"Sequence: {item.sequence.name}")
-                    print(f"Topics: {[topic.name for topic in item.topics]}")
+            # Initialize the session contextually with the data streamer
+            decoding_session = StatefulDecodingSession()
+
+            # Iterate through interleaved topics
+            for topic, msg in seq_handler.get_data_streamer():
+                img = msg.get_data(CompressedImage)
+
+                if img is None:
+                    # It is not a CompressedImage
+                    continue
+
+                if img.format in [ImageFormat.H264, ImageFormat.HEVC]:
+                    # Use the session for stateful video decoding
+                    # The 'context' parameter ensures we use the correct reference frames for this topic
+                    pil_img = decoding_session.decode(
+                        img_data=img.data,
+                        format=img.format,
+                        context=topic
+                    )
+                else:
+                    # Use standard stateless decoding for JPEG/PNG
+                    pil_img = img.to_image()
+
+                if pil_img:
+                    pil_img.show()
+
+            decoding_session.close()
         ```
     """
 
@@ -840,34 +950,109 @@ class CompressedImage(Serializable, HeaderMixin):
     def to_image(
         self,
         # TODO: enable param when allowing generic formats (not via Enum)
-        # codec: Optional[Any] = None,
+        codec: Optional[Any] = None,
+        **kwargs: Any,
     ) -> Optional[PILImage.Image]:
         """
         Decompresses the stored binary data into a usable PIL Image object.
 
-        NOTE: The function use the _DefaultCodec which is valid for stateless formats
-        only ('png', 'jpeg', ...). If dealing with a stateful compressed image,
-        the conversion must be made via explicit instantiation of a StatefulDecodingSession
-        class.
+        This method serves as the standard interface for converting compressed binary
+        blobs back into pixel data. It defaults to a stateless decoding approach
+        suitable for independent image frames.
+
+        Args:
+            codec (Optional[Any]): An optional codec instance implementing the
+                `.decode(img_bytes, format, **kwargs)` interface. If `None`,
+                it defaults to `_StatelessDefaultCodec`. This allows for the
+                injection of custom, optimized, or hardware-accelerated decoders.
+            **kwargs: Arbitrary keyword arguments passed directly to the codec's
+                decode method (e.g., quality hints or specific decoder flags).
+
+        Warning:
+            **Stateless Default**: The default codec cannot maintain temporal
+            state. For stateful formats like **H.264** or **HEVC**, calling this
+            method without a specialized `codec` will return `None`.
+
+            For multi-topic video sequences, use `StatefulDecodingSession.decode()`
+            instead to prevent memory corruption and visual artifacts caused by
+            interleaved P-frames.
 
         Returns:
-            PILImage.Image: A ready-to-use Pillow image object.
-            None: If the data is empty or decoding fails.
+            Optional[PILImage.Image]: A ready-to-use Pillow image object.
+                Returns `None` if the data is empty, the format is stateful
+                (and no compatible codec was provided), or decoding fails.
+
+        Example "Reading PNG `CompressedImage`":
+            ```python
+            from mosaicolabs import MosaicoClient, CompressedImage
+
+            with MosaicoClient.connect("localhost", 6726) as client:
+                seq_handler = client.sequence_handler("multi_camera_mission")
+
+                # Iterate through interleaved topics
+                for topic, msg in seq_handler.get_data_streamer():
+                    img = msg.get_data(CompressedImage)
+
+                    if img is None:
+                        # It is not a CompressedImage
+                        continue
+
+                    # Standard usage for JPEG/PNG
+                    pil_img = img.to_image()
+            ```
+
+        Example "Reading H264 `CompressedImage`":
+            ```python
+            from mosaicolabs import MosaicoClient, CompressedImage, StatefulDecodingSession
+
+            with MosaicoClient.connect("localhost", 6726) as client:
+                seq_handler = client.sequence_handler("multi_camera_mission")
+
+                # Initialize the session contextually with the data streamer
+                decoding_session = StatefulDecodingSession()
+
+                # Iterate through interleaved topics
+                for topic, msg in seq_handler.get_data_streamer():
+                    img = msg.get_data(CompressedImage)
+
+                    if img is None:
+                        # It is not a CompressedImage
+                        continue
+
+                    if img.format in [ImageFormat.H264, ImageFormat.HEVC]:
+                        # Use the session for stateful video decoding
+                        # The 'context' parameter ensures we use the correct reference frames for this topic
+                        pil_img = decoding_session.decode(
+                            img_data=img.data,
+                            format=img.format,
+                            context=topic
+                        )
+                    else:
+                        # Use standard stateless decoding for JPEG/PNG
+                        pil_img = img.to_image()
+
+                    if pil_img:
+                        pil_img.show()
+
+                decoding_session.close()
+            ```
         """
         if not self.data:
             return None
-        _codec = _StatelessDefaultCodec()
-        return _codec.decode(self.data, self.format)
+
+        if codec is None:
+            codec = _StatelessDefaultCodec()
+
+        return codec.decode(img_bytes=self.data, format=self.format, **kwargs)
 
     @classmethod
     def from_image(
         cls,
         image: PILImage.Image,
         format: ImageFormat = ImageFormat.PNG,
-        header: Optional[Header] = None,
         # TODO: enable param when allowing generic formats (not via Enum)
         # codec: Optional[CompressedImageCodec] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> "CompressedImage":
         """
         Factory method to create a CompressedImage from a PIL Image.
@@ -879,7 +1064,6 @@ class CompressedImage(Serializable, HeaderMixin):
         Args:
             image: The source Pillow image.
             format: The target compression format (default: 'jpeg').
-            header: Optional Header metadata.
             **kwargs: Additional arguments passed to the codec's encode method
                       (e.g., quality=90).
 
@@ -896,4 +1080,4 @@ class CompressedImage(Serializable, HeaderMixin):
             raise RuntimeError(
                 f"Failed to create CompressedImage (format: '{fmt_lower}')"
             )
-        return cls(data=compressed_bytes, format=format, header=header)
+        return cls(data=compressed_bytes, format=format)

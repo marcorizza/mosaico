@@ -3,8 +3,8 @@ members = ["crates/*", "bin/*", "tests/"]
 resolver = "3"
 
 [workspace.package]
-version = "0.2.6"
-authors = ["Mosaico author's"]
+version = "0.3.0"
+authors = ["Mosaico Labs <info@mosaico.dev>"]
 homepage = "https://mosaico.dev"
 repository = "https://github.com/mosaico-labs/mosaico"
 license = "AGPL-3.0"
@@ -14,30 +14,31 @@ rust-version = "1.92"
 [workspace.dependencies]
 # Internal crates
 mosaicod-core = { path = "crates/mosaicod-core" }
-mosaicod-repo = { path = "crates/mosaicod-repo" }
+mosaicod-db = { path = "crates/mosaicod-db" }
+mosaicod-facade = { path = "crates/mosaicod-facade" }
 mosaicod-ext = { path = "crates/mosaicod-ext" }
 mosaicod-marshal = { path = "crates/mosaicod-marshal" }
 mosaicod-query = { path = "crates/mosaicod-query" }
 mosaicod-rw = { path = "crates/mosaicod-rw" }
 mosaicod-server = { path = "crates/mosaicod-server" }
 mosaicod-store = { path = "crates/mosaicod-store" }
-# tests = { path = "itests" }
 
-# External dependencies
+# These dependencies need to be updated together
 arrow = { version = "57.3.0", features = ["prettyprint"] }
 arrow-cast = "57.2.0"
 arrow-flight = "57.2.0"
 arrow-schema = "57.2.0"
 parquet = "57.3.0"
+datafusion = { version = "52.1.0", default-features = false, features = ["compression", "parquet", "sql", "recursive_protection"] }
+tonic = { version = "0.14.5", features = ["tls-ring"] }
+
 base64 = "0.22.1"
 bincode = { version = "2.0.1", features = ["serde"] }
 bytes = "1.11.1"
-chrono = "0.4.43"
-clap = { version = "4.5.57", features = ["derive"] }
+chrono = "0.4.44"
+clap = { version = "4.5.60", features = ["derive"] }
 colored = "3.1.1"
-datafusion = "52.1.0"
 dotenv = "0.15.0"
-env_logger = "0.11.8"
 futures = "0.3.32"
 if-addrs = "0.15.0"
 log = "0.4.29"
@@ -55,10 +56,18 @@ sqlx = { version = "0.8.6", features = [
     "json",
 ] }
 thiserror = "2.0.18"
-tokio = { version = "1.47.1", features = ["rt-multi-thread"] }
-tonic = "0.14.3"
+tokio = { version = "1.50.0", features = ["rt-multi-thread"] }
 url = "2.5.8"
-uuid = "1.21.0"
+uuid = { version = "1.23.0", features = [ "v4" ] }
+crc32fast = "1.5.0"
+iso8601 = "0.6.3"
+semver = "1.0.27"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["json", "env-filter"] }
+
+# Used to implement middlewares in mosaicod-server crate 
+tower = "0.5.3"
+http = "1.4.0"
 
 [profile.release]
 strip = true    # Strip symbols from binary

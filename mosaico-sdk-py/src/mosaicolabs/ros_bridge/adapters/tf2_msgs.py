@@ -1,16 +1,16 @@
 from typing import Any, Optional, Tuple, Type
+
 from mosaicolabs.models import Message
 
-from ..data_ontology import FrameTransform
 from ..adapter_base import ROSAdapterBase
+from ..data_ontology import FrameTransform
+from ..ros_bridge import register_default_adapter
 from ..ros_message import ROSMessage
-from ..ros_bridge import register_adapter
-
 from .geometry_msgs import TransformAdapter
 from .helpers import _validate_msgdata
 
 
-@register_adapter
+@register_default_adapter
 class FrameTransformAdapter(ROSAdapterBase):
     """
     Adapter for translating ROS TF2 messages to Mosaico `FrameTransform`.

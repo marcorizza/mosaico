@@ -13,7 +13,7 @@ It handles the complex orchestration of:
 4.  **Configuration:** Managing custom message definitions via `ROSTypeRegistry`.
 
 Typical usage as a script:
-    $ mosaico.ros_injector ./data.mcap --name "Test_Run_01"
+    $ mosaicolabs.ros_injector ./data.mcap --name "Test_Run_01"
 
 Typical usage as a library:
     config = ROSInjectionConfig(file_path=Path("data.mcap"), ...)
@@ -26,7 +26,8 @@ import json
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple, Type
+from typing import Dict, List, Optional, Set, Tuple, Type, Union
+
 from rich.live import Live
 from rich.progress import (
     BarColumn,
@@ -40,17 +41,26 @@ from rich.progress import (
 from rosbags.typesys import Stores
 
 from mosaicolabs.comm.mosaico_client import MosaicoClient
-from mosaicolabs.enum import OnErrorPolicy, SequenceStatus
+from mosaicolabs.enum import (
+    OnErrorPolicy,
+    SequenceStatus,
+    SessionLevelErrorPolicy,
+    TopicLevelErrorPolicy,
+    TopicWriterStatus,
+)
 from mosaicolabs.handlers import SequenceWriter
 from mosaicolabs.logging_config import get_logger, setup_sdk_logging
 
-from .ros_bridge import ROSAdapterBase, ROSBridge
 from .loader import LoaderErrorPolicy, ROSLoader
 from .registry import ROSTypeRegistry
+from .ros_bridge import ROSAdapterBase, ROSBridge
 from .ros_message import ROSMessage
 
 # Set the hierarchical logger
 logger = get_logger(__name__)
+
+_DEFAULT_TOPIC_ON_ERROR = TopicLevelErrorPolicy.Raise
+_DEFAULT_SESSION_ON_ERROR = SessionLevelErrorPolicy.Report
 
 
 # --- Configuration ---
@@ -72,16 +82,34 @@ class ROSInjectionConfig:
         port (int): Port of the Mosaico server. Defaults to 6726.
         ros_distro (Optional[Stores]): The target ROS distribution for message parsing (e.g., Stores.ROS2_HUMBLE).
             See [`rosbags.typesys.Stores`](https://ternaris.gitlab.io/rosbags/topics/typesys.html#type-stores).
-        on_error (OnErrorPolicy): Behavior when an ingestion error occurs (Delete the partial sequence or Report the error).
+        on_error (Union[SessionLevelErrorPolicy, OnErrorPolicy]): Behavior when an ingestion error occurs (Delete the partial sequence or Report the error).
+            Default: [`SessionLevelErrorPolicy.Report`][mosaicolabs.enum.SessionLevelErrorPolicy.Report]
+            Deprecated:
+                    [`OnErrorPolicy`][mosaicolabs.enum.OnErrorPolicy] is deprecated since v0.3.0; use
+                    [`SessionLevelErrorPolicy`][mosaicolabs.enum.SessionLevelErrorPolicy] instead.
+                    It will be removed in v0.4.0.
+        topics_on_error (Union[TopicLevelErrorPolicy, Dict[str, TopicLevelErrorPolicy]]): Behavior when a topic write fails.
+            Default: [`TopicLevelErrorPolicy.Raise`][mosaicolabs.enum.TopicLevelErrorPolicy.Raise]
+            Set to a [`TopicLevelErrorPolicy`][mosaicolabs.enum.TopicLevelErrorPolicy] to apply the same policy to all topics.
+            Set to a `Dict[str, TopicLevelErrorPolicy]` to apply different policies to different (subset of) topics.
         custom_msgs (Optional[List[Tuple]]): List of custom .msg definitions to register before loading.
         topics (Optional[List[str]]): List of topics to filter, supporting glob patterns (e.g., ["/cam/*"]).
+        adapter_overrides (Optional[Dict[str, Type[ROSAdapterBase]]]): Mapping of topics to adapter overrides,
+            allowing the use of specific adapters instead of the default for designated topics.
+            Deafult: None
         log_level (str): Logging verbosity level ("DEBUG", "INFO", "WARNING", "ERROR").
+        mosaico_api_key (Optional[str]): The API key for authentication on the mosaico server.
+            If provided it must be have at least [`APIKeyPermissionEnum.Write`][mosaicolabs.enum.APIKeyPermissionEnum.Write]
+            permission.
+            Default: None
+        tls_cert_path (Optional[str]): Path to the TLS certificate file for secure connection on the mosaico server.
+            Default: None
 
     Example:
         ```python
         from pathlib import Path
         from rosbags.typesys import Stores
-        from mosaicolabs.enum import OnErrorPolicy
+        from mosaicolabs.enum import SessionLevelErrorPolicy
         from mosaicolabs.ros_bridge import ROSInjectionConfig
 
         config = ROSInjectionConfig(
@@ -89,16 +117,36 @@ class ROSInjectionConfig:
             sequence_name="test_drive_01",
             metadata={"environment": "urban", "vehicle": "robot_alpha"},
             ros_distro=Stores.ROS2_FOXY,
-            on_error=OnErrorPolicy.Delete
+            on_error=SessionLevelErrorPolicy.Delete,
+            topics_on_error=TopicLevelErrorPolicy.Finalize,
         )
         ```
     """
 
     file_path: Path
+    """
+    The path to the ROS bag file to ingest.
+    """
+
     sequence_name: str
+    """
+    The name of the sequence to create.
+    """
+
     metadata: dict
+    """
+    Metadata to associate with the sequence.
+    """
+
     host: str = "localhost"
+    """
+    The hostname of the Mosaico server.
+    """
+
     port: int = 6726
+    """
+    The port of the Mosaico server.
+    """
 
     ros_distro: Optional[Stores] = None
     """
@@ -107,14 +155,24 @@ class ROSInjectionConfig:
     See [`rosbags.typesys.Stores`](https://ternaris.gitlab.io/rosbags/topics/typesys.html#type-stores).
     """
 
-    on_error: OnErrorPolicy = OnErrorPolicy.Delete
+    on_error: Union[SessionLevelErrorPolicy, OnErrorPolicy] = _DEFAULT_SESSION_ON_ERROR
     """the `SequenceWriter` `on_error` behavior when a sequence write fails (Report vs Delete)"""
+
+    topics_on_error: Union[TopicLevelErrorPolicy, Dict[str, TopicLevelErrorPolicy]] = (
+        _DEFAULT_TOPIC_ON_ERROR
+    )
+    """
+    The TopicWriter `on_error` behavior ([`TopicLevelErrorPolicy`][mosaicolabs.enum.TopicLevelErrorPolicy]) when a topic write fails.
+    Default is `TopicLevelErrorPolicy.Raise` for all topics.
+    Set to a `TopicLevelErrorPolicy` to apply the same policy to all topics.
+    Set to a `Dict[str, TopicLevelErrorPolicy]` to apply different policies to different topics.
+    """
 
     custom_msgs: Optional[List[Tuple[str, Path, Optional[Stores]]]] = None
     """
     A list of tuples (package_name, path, store) to register custom .msg definitions before loading.
 
-    For example, for "my_robot_msgs/msg/Location" pass: 
+    For example, for "my_robot_msgs/msg/Location" pass:
 
     package_name = "my_robot_msgs"; path = path/to/Location.msg; store = Stores.ROS2_HUMBLE (e.g.) or None
 
@@ -124,7 +182,21 @@ class ROSInjectionConfig:
     topics: Optional[List[str]] = None
     """A list of specific topics to filter (supports glob patterns). If None, all compatible topics are loaded."""
 
+    adapter_overrides: Optional[Dict[str, Type[ROSAdapterBase]]] = None
+    """A mapping of topics to adapter overrides, allowing the use of specific adapters instead of the default for designated topics."""
+
     log_level: str = "INFO"
+
+    mosaico_api_key: Optional[str] = None
+    """
+    The API key for authentication on the mosaico server. Defaults to None.
+    
+    If provided it must be have at least [`APIKeyPermissionEnum.Write`][mosaicolabs.enum.APIKeyPermissionEnum.Write]
+    permission.
+    """
+
+    tls_cert_path: Optional[str] = None
+    """Path to the TLS certificate file for secure connection on the mosaico server. Defaults to None."""
 
 
 # --- UI / Progress Helper ---
@@ -207,7 +279,7 @@ class ProgressManager:
             self.progress.advance(self.global_task)
 
     def advance_all(self, topic: str):
-        """Advances both the specific topic's bar and the global bar (successful process)."""
+        """Advances both the specific topic's bar and the global bar."""
         if topic in self.tasks:
             self.progress.advance(self.tasks[topic])
         if self.global_task is not None:
@@ -267,6 +339,8 @@ class RosbagInjector:
         # Set of topics to skip (e.g., no adapter found), allowing O(1) fast-fail in the loop.
         self._ignored_topics: Set[str] = set()
 
+        self._loader: Optional[ROSLoader] = None
+
     def _register_custom_types(self):
         """
         Loads custom ROS message definitions into the global `ROSTypeRegistry`.
@@ -287,7 +361,7 @@ class RosbagInjector:
             except Exception as e:
                 logger.error(f"Failed to register custom msgs at '{path}': '{e}'")
 
-    def _get_adapter(self, msg_type: str) -> Optional[Type[ROSAdapterBase]]:
+    def _get_default_adapter(self, msg_type: str) -> Optional[Type[ROSAdapterBase]]:
         """
         Memoized lookup for Mosaico ROS Adapters.
 
@@ -298,7 +372,18 @@ class RosbagInjector:
             The adapter class if found, otherwise None.
         """
 
-        return ROSBridge.get_adapter(msg_type)
+        return ROSBridge.get_default_adapter(msg_type)
+
+    def _open_or_get_loader(self) -> ROSLoader:
+        if self._loader is None:
+            self._loader = ROSLoader(
+                file_path=self.cfg.file_path,
+                topics=self.cfg.topics,
+                typestore_name=self.cfg.ros_distro or Stores.EMPTY,
+                error_policy=LoaderErrorPolicy.IGNORE,
+            )
+
+        return self._loader
 
     def run(self):
         """
@@ -320,16 +405,15 @@ class RosbagInjector:
         try:
             # Context: Mosaico Client (Network Connection)
             with MosaicoClient.connect(
-                host=self.cfg.host, port=self.cfg.port
+                host=self.cfg.host,
+                port=self.cfg.port,
+                api_key=self.cfg.mosaico_api_key,
+                tls_cert_path=self.cfg.tls_cert_path,
             ) as mclient:
                 # Context: ROS Loader (File Access)
                 logger.info(f"Opening bag: '{self.cfg.file_path}'")
-                with ROSLoader(
-                    file_path=self.cfg.file_path,
-                    topics=self.cfg.topics,
-                    typestore_name=self.cfg.ros_distro or Stores.EMPTY,
-                    error_policy=LoaderErrorPolicy.IGNORE,
-                ) as ros_loader:
+
+                with self._open_or_get_loader() as ros_loader:
                     # Setup Progress UI
                     ui = ProgressManager(ros_loader)
                     ui.setup()
@@ -350,7 +434,7 @@ class RosbagInjector:
                             for ros_msg, exc in ros_loader:
                                 self._process_message(ros_msg, exc, seq_writer, ui)
 
-                if seq_writer.sequence_status == SequenceStatus.Error:
+                if seq_writer.status == SequenceStatus.Error:
                     logger.error(
                         "`SequenceWriter` returned a `SequenceStatus.Error` status. Upload might have failed!"
                     )
@@ -414,6 +498,14 @@ class RosbagInjector:
             )
         )
 
+    def _get_topic_on_error(self, topic: str) -> TopicLevelErrorPolicy:
+        if isinstance(self.cfg.topics_on_error, dict):
+            return self.cfg.topics_on_error.get(topic, _DEFAULT_TOPIC_ON_ERROR)
+        elif isinstance(self.cfg.topics_on_error, TopicLevelErrorPolicy):
+            return self.cfg.topics_on_error
+
+        return _DEFAULT_TOPIC_ON_ERROR
+
     def _process_message(
         self,
         ros_msg: ROSMessage,
@@ -445,7 +537,9 @@ class RosbagInjector:
             return
 
         # --- Adapter Resolution ---
-        adapter = self._get_adapter(ros_msg.msg_type)
+        adapter = (self.cfg.adapter_overrides or {}).get(
+            ros_msg.topic
+        ) or self._get_default_adapter(ros_msg.msg_type)
 
         if adapter is None:
             # If no adapter exists, blacklist this topic to prevent future lookups
@@ -463,6 +557,7 @@ class RosbagInjector:
                 topic_name=ros_msg.topic,
                 metadata={},  # TODO: how-to push metadata per topic?
                 ontology_type=adapter.ontology_data_type(),
+                on_error=self._get_topic_on_error(ros_msg.topic),
             )
             if twriter is None:
                 ui.update_status(ros_msg.topic, "Write Error", "red")
@@ -471,15 +566,21 @@ class RosbagInjector:
                 return
 
         # --- Adapt & Push ---
-        try:
-            # Convert ROS dict -> Mosaico Object -> Arrow Batch
-            twriter.push(adapter.translate(ros_msg))
-            ui.advance_all(ros_msg.topic)
-        except Exception:
-            # If writing fails (e.g. network error, validation error), update UI
-            ui.update_status(ros_msg.topic, "Write Error", "red")
-            # We assume transient error and continue; strict policies are handled by Client
-            ui.advance_all(ros_msg.topic)
+        if (
+            twriter.is_active
+        ):  # Avoid computations if prematurely closed (TopicLevelErrorPolicy.Finalize)
+            with twriter:
+                # Convert ROS dict -> Mosaico Object -> Arrow Batch
+                twriter.push(adapter.translate(ros_msg))
+            if twriter.status == TopicWriterStatus.IgnoredLastError:
+                # If writing fails (e.g. network error, validation error), update UI
+                ui.update_status(ros_msg.topic, "Write Error (Ignored)", "yellow")
+            elif twriter.status == TopicWriterStatus.FinalizedWithError:
+                ui.update_status(
+                    ros_msg.topic, "Fatal Error: Prematurely finalized", "red"
+                )
+
+        ui.advance_all(ros_msg.topic)
 
 
 # --- CLI Entry Point ---
@@ -570,6 +671,20 @@ def ros_injector():
         "If not set, defaults to ROS2_HUMBLE.",
     )
 
+    # Advanced Arguments
+    parser.add_argument(
+        "--api-key",
+        default=None,
+        help="Mosaico API-Key",
+    )
+
+    # Advanced Arguments
+    parser.add_argument(
+        "--tls-cert",
+        default=None,
+        help="Path of the .cert file for secure connection",
+    )
+
     parser.add_argument(
         "--log",
         "-l",
@@ -607,6 +722,8 @@ def ros_injector():
         topics=args.topics,
         ros_distro=selected_distro,
         log_level=args.log,
+        tls_cert_path=args.tls_cert,
+        mosaico_api_key=args.api_key,
     )
 
     # --- Execution ---

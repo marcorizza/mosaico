@@ -1,86 +1,51 @@
 //! This module defines the formatting structure for
 //! responses.
+
+use mosaicod_core::types::{self, Resource, auth};
+use semver;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
-use mosaicod_core::types::{self, Resource};
-
-/// Generic response message used to provide to clients the key
+/// Generic response message used to provide to clients the a unique key
 /// of a resource
 #[derive(Serialize, Deserialize, Debug)]
-pub struct ResourceKey {
-    pub key: String,
+pub struct ResourceUuid {
+    pub uuid: String,
 }
 
-impl From<types::ResourceId> for ResourceKey {
-    fn from(value: types::ResourceId) -> Self {
+impl From<types::Identifiers> for ResourceUuid {
+    fn from(value: types::Identifiers) -> Self {
         Self {
-            key: value.uuid.to_string(),
+            uuid: value.uuid.to_string(),
         }
     }
 }
 
-#[derive(Serialize, Debug)]
-pub struct TopicSystemInfo {
-    /// Number of chunks in the topic
-    pub chunks_number: usize,
-    /// Total size in bytes of the data.
-    /// Metadata and other system files are excluded in the count.
-    pub total_size_bytes: usize,
-    /// True if topic is locked
-    pub is_locked: bool,
-    /// Datetime of the topic creation
-    pub created_datetime: String,
-}
-
-impl From<types::TopicSystemInfo> for TopicSystemInfo {
-    fn from(value: types::TopicSystemInfo) -> Self {
+impl From<types::Uuid> for ResourceUuid {
+    fn from(value: types::Uuid) -> Self {
         Self {
-            chunks_number: value.chunks_number,
-            total_size_bytes: value.total_size_bytes,
-            is_locked: value.is_locked,
-            created_datetime: value.created_datetime.to_string(),
-        }
-    }
-}
-
-#[derive(Serialize, Debug)]
-pub struct SequenceSystemInfo {
-    /// Total size in bytes of the data.
-    /// This values includes additional system files.
-    pub total_size_bytes: usize,
-    /// True if sequence is locked
-    pub is_locked: bool,
-    /// Datetime of the sequence creation
-    pub created_datetime: String,
-}
-
-impl From<types::SequenceSystemInfo> for SequenceSystemInfo {
-    fn from(value: types::SequenceSystemInfo) -> Self {
-        Self {
-            total_size_bytes: value.total_size_bytes,
-            is_locked: value.is_locked,
-            created_datetime: value.created_datetime.to_string(),
+            uuid: value.to_string(),
         }
     }
 }
 
 // ########
-// Notifies
+// Notifications
 // ########
 
 #[derive(Serialize, Debug)]
-pub struct ResponseNotifyItem {
+pub struct ResponseNotificationItem {
     pub name: String,
-    pub notify_type: String,
+    pub notification_type: String,
     pub msg: String,
     pub created_datetime: String,
 }
 
-impl From<types::Notify> for ResponseNotifyItem {
-    fn from(value: types::Notify) -> Self {
+impl From<types::Notification> for ResponseNotificationItem {
+    fn from(value: types::Notification) -> Self {
         Self {
-            name: value.target.name().to_string(),
-            notify_type: value.notify_type.to_string(),
+            name: value.target.locator().to_string(),
+            notification_type: value.notification_type.to_string(),
             msg: value.msg.unwrap_or_default(),
             created_datetime: value.created_at.to_string(),
         }
@@ -88,14 +53,14 @@ impl From<types::Notify> for ResponseNotifyItem {
 }
 
 #[derive(Serialize, Debug)]
-pub struct NotifyList {
-    pub notifies: Vec<ResponseNotifyItem>,
+pub struct NotificationList {
+    pub notifications: Vec<ResponseNotificationItem>,
 }
 
-impl From<Vec<types::Notify>> for NotifyList {
-    fn from(value: Vec<types::Notify>) -> Self {
+impl From<Vec<types::Notification>> for NotificationList {
+    fn from(value: Vec<types::Notification>) -> Self {
         Self {
-            notifies: value.into_iter().map(Into::into).collect(),
+            notifications: value.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -153,7 +118,7 @@ pub struct ResponseQueryItemTopic {
 impl From<types::TopicResourceLocator> for ResponseQueryItemTopic {
     fn from(value: types::TopicResourceLocator) -> Self {
         Self {
-            locator: value.name().to_owned(),
+            locator: value.locator().to_owned(),
             timestamp_range: value
                 .timestamp_range
                 .map(|e| (e.start.into(), e.end.into())),
@@ -170,7 +135,7 @@ pub struct ResponseQueryItem {
 impl From<types::SequenceTopicGroup> for ResponseQueryItem {
     fn from(value: types::SequenceTopicGroup) -> Self {
         Self {
-            sequence: value.sequence.name().to_string(),
+            sequence: value.sequence.locator().to_string(),
             topics: value.topics.into_iter().map(Into::into).collect(),
         }
     }
@@ -182,6 +147,82 @@ impl From<types::SequenceTopicGroupSet> for Query {
         Self {
             items: vec.into_iter().map(Into::into).collect(),
         }
+    }
+}
+
+// ####
+// Api Key
+// ####
+
+#[derive(Serialize, Debug)]
+pub struct ApiKeyToken {
+    pub api_key_token: String,
+}
+
+impl From<auth::Token> for ApiKeyToken {
+    fn from(value: auth::Token) -> Self {
+        Self {
+            api_key_token: value.to_string(),
+        }
+    }
+}
+
+#[derive(Serialize, Debug)]
+pub struct ApiKeyStatus {
+    pub api_key_fingerprint: String,
+    pub description: String,
+    pub created_at_ns: i64,
+    pub expires_at_ns: Option<i64>,
+}
+
+impl From<&auth::ApiKey> for ApiKeyStatus {
+    fn from(value: &auth::ApiKey) -> Self {
+        Self {
+            api_key_fingerprint: value.token().fingerprint().to_string(),
+            description: value.description.clone(),
+            created_at_ns: value.created_at.as_i64(),
+            expires_at_ns: value.expires_at.map(Into::into),
+        }
+    }
+}
+
+// ####
+// Misc
+// ####
+
+#[derive(Serialize, Debug)]
+pub struct SemVerItem {
+    pub major: u64,
+    pub minor: u64,
+    pub patch: u64,
+    pub pre: String,
+}
+
+#[derive(Serialize, Debug)]
+pub struct ServerVersion {
+    pub version: String,
+    pub semver: SemVerItem,
+}
+
+impl FromStr for ServerVersion {
+    type Err = semver::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let version = semver::Version::parse(s)?;
+
+        Ok(Self {
+            version: s.to_owned(),
+            semver: SemVerItem {
+                major: version.major,
+                minor: version.minor,
+                patch: version.patch,
+                pre: if !version.pre.is_empty() {
+                    version.pre.to_string()
+                } else {
+                    String::new()
+                },
+            },
+        })
     }
 }
 

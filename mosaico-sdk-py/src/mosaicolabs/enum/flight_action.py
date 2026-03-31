@@ -1,7 +1,7 @@
-from enum import StrEnum
+from enum import Enum
 
 
-class FlightAction(StrEnum):
+class FlightAction(Enum):
     """
     Internal enumeration of PyArrow Flight action identifiers.
 
@@ -20,23 +20,23 @@ class FlightAction(StrEnum):
     SEQUENCE_CREATE = "sequence_create"
     """Initiates the registration of a new sequence on the server."""
 
-    SEQUENCE_FINALIZE = "sequence_finalize"
-    """Marks a sequence as complete and makes its data immutable."""
+    SESSION_CREATE = "session_create"
+    """Initiates the registration of a new session for an existing sequence on the server."""
 
-    SEQUENCE_NOTIFY_CREATE = "sequence_notify_create"
+    SESSION_FINALIZE = "session_finalize"
+    """Marks a session as complete and makes its data immutable."""
+
+    SEQUENCE_NOTIFICATION_CREATE = "sequence_notification_create"
     """Sends asynchronous notifications or error reports during the sequence creation phase."""
 
-    SEQUENCE_NOTIFY_LIST = "sequence_notify_list"
+    SEQUENCE_NOTIFICATION_LIST = "sequence_notification_list"
     """Request the list of notifications for a specific sequence"""
 
-    SEQUENCE_NOTIFY_PURGE = "sequence_notify_purge"
+    SEQUENCE_NOTIFICATION_PURGE = "sequence_notification_purge"
     """Request the deletion of the list of notifications for a specific sequence"""
 
-    SEQUENCE_SYSTEM_INFO = "sequence_system_info"
-    """Requests physical diagnostics such as storage size and lock status for a sequence."""
-
-    SEQUENCE_ABORT = "sequence_abort"
-    """Signals the server to stop an active ingestion and discard partial data."""
+    SESSION_DELETE = "session_delete"
+    """Requests the permanent removal of a session and all associated topics from the server."""
 
     SEQUENCE_DELETE = "sequence_delete"
     """Requests the permanent removal of a sequence and all associated topics from the server."""
@@ -45,17 +45,14 @@ class FlightAction(StrEnum):
     TOPIC_CREATE = "topic_create"
     """Registers a new topic within an existing sequence context."""
 
-    TOPIC_NOTIFY_CREATE = "topic_notify_create"
+    TOPIC_NOTIFICATION_CREATE = "topic_notification_create"
     """Reports errors or status updates specific to an individual topic stream."""
 
-    TOPIC_NOTIFY_LIST = "topic_notify_list"
+    TOPIC_NOTIFICATION_LIST = "topic_notification_list"
     """Request the list of notifications for a specific topic in a sequence"""
 
-    TOPIC_NOTIFY_PURGE = "topic_notify_purge"
+    TOPIC_NOTIFICATION_PURGE = "topic_notification_purge"
     """Request the deletion of the list of notifications for a topic in a sequence"""
-
-    TOPIC_SYSTEM_INFO = "topic_system_info"
-    """Requests storage and chunk metadata for an individual topic."""
 
     TOPIC_DELETE = "topic_delete"
     """Requests the permanent removal of a specific topic from the platform."""
@@ -76,3 +73,16 @@ class FlightAction(StrEnum):
     # --- Queries related ---
     QUERY = "query"
     """Commands a multi-layer search query against the platform."""
+
+    API_KEY_CREATE = "api_key_create"
+    """Creates a new API key."""
+
+    API_KEY_REVOKE = "api_key_revoke"
+    """Revokes an existing API key."""
+
+    API_KEY_STATUS = "api_key_status"
+    """Checks the status of a specific API key."""
+
+    # --- Arch related ---
+    VERSION = "version"
+    """Requests the backend version"""

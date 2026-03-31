@@ -7,24 +7,30 @@ and distributes client resources (Connections, Executors) to individual Topics.
 """
 
 from typing import Any, Optional, Type
+
 import pyarrow.flight as fl
 
-from .base_sequence_writer import BaseSequenceWriter
-from .config import WriterConfig
-from .helpers import _validate_sequence_name
-from .topic_writer import TopicWriter
-from ..comm.do_action import _do_action, _DoActionResponseKey
 from ..comm.connection import _ConnectionPool
+from ..comm.do_action import _do_action
 from ..comm.executor_pool import _ExecutorPool
-from ..enum import FlightAction, SequenceStatus
+from ..enum import (
+    FlightAction,
+    SequenceStatus,
+    SessionLevelErrorPolicy,
+    TopicLevelErrorPolicy,
+)
 from ..logging_config import get_logger
 from ..models import Serializable
+from .base_session_writer import _BaseSessionWriter
+from .config import SessionWriterConfig
+from .helpers import _make_exception, _validate_metadata, _validate_sequence_name
+from .topic_writer import TopicWriter
 
 # Set the hierarchical logger
 logger = get_logger(__name__)
 
 
-class SequenceWriter(BaseSequenceWriter):
+class SequenceWriter(_BaseSessionWriter):
     """
     Orchestrates the creation and data ingestion lifecycle of a Mosaico Sequence.
 
@@ -43,7 +49,7 @@ class SequenceWriter(BaseSequenceWriter):
     Important: Usage Pattern
         This class **must** be used within a `with` statement (Context Manager).
         The context entry triggers sequence registration on the server, while the exit handles
-        automatic finalization or error cleanup based on the configured `OnErrorPolicy`.
+        automatic finalization or error cleanup based on the configured `SessionLevelErrorPolicy`.
 
     Important: Obtaining a Writer
         Do not instantiate this class directly. Use the
@@ -60,7 +66,7 @@ class SequenceWriter(BaseSequenceWriter):
         connection_pool: Optional[_ConnectionPool],
         executor_pool: Optional[_ExecutorPool],
         metadata: dict[str, Any],
-        config: WriterConfig,
+        config: SessionWriterConfig,
     ):
         """
         Internal constructor for SequenceWriter.
@@ -71,7 +77,7 @@ class SequenceWriter(BaseSequenceWriter):
 
         Example:
             ```python
-            from mosaicolabs import MosaicoClient, OnErrorPolicy
+            from mosaicolabs import MosaicoClient, SessionLevelErrorPolicy
 
             # Open the connection with the Mosaico Client
             with MosaicoClient.connect("localhost", 6726) as client:
@@ -95,7 +101,7 @@ class SequenceWriter(BaseSequenceWriter):
                             },
                         },
                     }
-                    on_error = OnErrorPolicy.Delete # Default
+                    on_error = SessionLevelErrorPolicy.Delete
                     ) as seq_writer:
                         # Start creating topics and pushing data
                         # (2)!
@@ -118,6 +124,7 @@ class SequenceWriter(BaseSequenceWriter):
             config: Operational configuration (e.g., error policies, batch sizes).
         """
         _validate_sequence_name(sequence_name)
+        _validate_metadata(metadata)
         self._metadata: dict[str, Any] = metadata
         """The metadata of the new sequence"""
 
@@ -137,38 +144,84 @@ class SequenceWriter(BaseSequenceWriter):
         Performs the server-side handshake to create the new sequence.
 
         Triggers the `SEQUENCE_CREATE` action, transmitting the sequence name
-        and initial metadata. Upon success, it captures the unique authorization
-        key required for subsequent topic creation.
+        and initial metadata. Then inits a new session.
 
         Raises:
             Exception: If the server rejects the creation or returns an empty response.
         """
-        ACTION = FlightAction.SEQUENCE_CREATE
-
-        act_resp = _do_action(
+        # 1. Send the `SEQUENCE_CREATE` command, to create the remote resource. This returns no response
+        _do_action(
             client=self._control_client,
-            action=ACTION,
+            action=FlightAction.SEQUENCE_CREATE,
             payload={
-                "name": self._name,
+                "locator": self._name,
                 "user_metadata": self._metadata,
             },
-            expected_type=_DoActionResponseKey,
+            expected_type=None,
         )
 
-        if act_resp is None:
-            raise Exception(f"Action '{ACTION.value}' returned no response.")
+        # 2. Initialize a new session for the sequence
+        super()._init_session(self._name)
 
-        self._key = act_resp.key
-        self._entered = True
-        self._sequence_status = SequenceStatus.Pending
+    def _on_context_exit(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[Any],
+    ) -> None:
+        """
+        Override the __exit__ method to handle exceptions and apply `on_error` policies.
 
-    # NOTE: No need of overriding `_on_context_exit` as default behavior is ok.
+        Args:
+            exc_type: The type of the exception.
+            exc_value: The exception value.
+            traceback: The traceback.
+
+        Returns:
+            The return value of the base class __exit__ method.
+        """
+
+        # Run base session cleanup
+        super()._on_context_exit(exc_type, exc_val, exc_tb)
+
+        # Apply policy upon exception caught in the context
+        if (
+            exc_type is not None
+            and self._config.on_error == SessionLevelErrorPolicy.Delete
+        ):
+            self._logger.error(
+                f"Sequence writer for sequence {self._name} caught exception: '{exc_val}'."
+                f"Triggering `SessionLevelErrorPolicy.Delete`."
+            )
+            # Delete the sequence
+            self._delete()
+
+    def _delete(self):
+        """Internal: Sends Delete command (Delete policy)."""
+        if self._status != SequenceStatus.Finalized:
+            try:
+                _do_action(
+                    client=self._control_client,
+                    action=FlightAction.SEQUENCE_DELETE,
+                    payload={
+                        "locator": self._name,
+                    },
+                    expected_type=None,
+                )
+                self._logger.info(f"Sequence '{self._name}' deleted successfully.")
+                self._status = SequenceStatus.Error
+            except Exception as e:
+                raise _make_exception(
+                    f"Error sending 'delete' for sequence '{self._name}'.",
+                    e,
+                )
 
     def topic_create(
         self,
         topic_name: str,
         metadata: dict[str, Any],
         ontology_type: Type[Serializable],
+        on_error: TopicLevelErrorPolicy = TopicLevelErrorPolicy.Raise,
     ) -> Optional[TopicWriter]:
         """
         Creates a new topic within the active sequence.
@@ -181,6 +234,7 @@ class SequenceWriter(BaseSequenceWriter):
             topic_name: The relative name of the new topic.
             metadata: Topic-specific user metadata.
             ontology_type: The `Serializable` data model class defining the topic's schema.
+            on_error: The error policy to use in the `TopicWriter`.
 
         Returns:
             A `TopicWriter` instance configured for parallel ingestion, or `None` if creation fails.
@@ -239,7 +293,8 @@ class SequenceWriter(BaseSequenceWriter):
             ```
 
             1. See also: [`MosaicoClient.sequence_create()`][mosaicolabs.comm.MosaicoClient.sequence_create]
-            2. The metadata fields will be queryable via the `Query` mechanism. The mechanism allows creating query expressions like: `Topic.Q.user_metadata["interface.type"].eq("UART")`.
+            2. The metadata fields will be queryable via the `Query` mechanism.
+                The mechanism allows creating query expressions like: `QueryTopic().with_user_metadata("interface.type", eq="UART")`.
                 See also:
                 * [`mosaicolabs.models.platform.Topic`][mosaicolabs.models.platform.Topic]
                 * [`mosaicolabs.models.query.builders.QueryTopic`][mosaicolabs.models.query.builders.QueryTopic].
@@ -250,4 +305,15 @@ class SequenceWriter(BaseSequenceWriter):
             topic_name=topic_name,
             metadata=metadata,
             ontology_type=ontology_type,
+            on_error=on_error,
         )
+
+    @property
+    def status(self) -> SequenceStatus:
+        """
+        Returns the current operational status of the sequence.
+
+        Returns:
+            The [`SequenceStatus`][mosaicolabs.enum.SequenceStatus].
+        """
+        return self._status

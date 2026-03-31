@@ -31,7 +31,7 @@ pub struct Timeseries {
 
 impl Timeseries {
     pub fn try_new(store: Arc<store::Store>) -> Result<Self, Error> {
-        let memory_limit_bytes = params::configurables().query_engine_memory_pool;
+        let memory_limit_bytes = params::params().query_engine_memory_pool;
 
         let memory_pool = if memory_limit_bytes != 0 {
             Some(Arc::new(FairSpillPool::new(memory_limit_bytes)))
@@ -312,7 +312,7 @@ mod tests {
     /// range
     #[tokio::test]
     async fn timeseries_range() {
-        params::load_configurables_from_env();
+        params::load_params_from_env(params::ParamsLoadOptions::testing()).unwrap();
 
         let file_path = "dummy_file.parquet";
 
