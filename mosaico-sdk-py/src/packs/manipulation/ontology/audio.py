@@ -2,7 +2,7 @@ import pyarrow as pa
 from enum import Enum
 from typing import Optional
 
-from mosaicolabs import Serializable, HeaderMixin
+from mosaicolabs import Serializable
 
 
 class AudioFormat(str, Enum):
@@ -71,7 +71,7 @@ class AudioData(Serializable):
     data: bytes
 
 
-class AudioDataStamped(Serializable, HeaderMixin):
+class AudioDataStamped(Serializable):
     __ontology_tag__ = "audio_data_stamped"
 
     __msco_pyarrow_struct__ = pa.struct(

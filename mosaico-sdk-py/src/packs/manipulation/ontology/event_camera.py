@@ -4,7 +4,7 @@ import numpy as np
 import pyarrow as pa
 from PIL import Image as PILImage
 
-from mosaicolabs import HeaderMixin, Serializable
+from mosaicolabs import Serializable
 
 
 class Event(Serializable):
@@ -47,7 +47,7 @@ class Event(Serializable):
     dt_ns: int
 
 
-class EventCamera(Serializable, HeaderMixin):
+class EventCamera(Serializable):
     __ontology_tag__ = "event_camera"
 
     __msco_pyarrow_struct__ = pa.struct(
