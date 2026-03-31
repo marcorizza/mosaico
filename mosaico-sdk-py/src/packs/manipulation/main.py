@@ -7,11 +7,10 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 from mosaicolabs import MosaicoClient, setup_sdk_logging
+from packs.manipulation.configs import MOSAICO_HOST, MOSAICO_PORT
 from packs.manipulation.runner.runner import ManipulationRunner
 
 LOGGER = logging.getLogger(__name__)
-MOSAICO_HOST = "localhost"
-MOSAICO_PORT = 6726
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 
 

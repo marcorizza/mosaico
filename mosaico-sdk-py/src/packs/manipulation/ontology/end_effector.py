@@ -2,10 +2,10 @@ from typing import List
 
 import pyarrow as pa
 
-from mosaicolabs import Serializable, HeaderMixin
+from mosaicolabs import Serializable
 
 
-class EndEffector(Serializable, HeaderMixin):
+class EndEffector(Serializable):
     __ontology_tag__ = "end_effector"
 
     __msco_pyarrow_struct__ = pa.struct(

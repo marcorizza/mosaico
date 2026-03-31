@@ -20,7 +20,7 @@ class ReassemblePlugin:
 
     def create_sequence_descriptor(self, sequence_path: Path) -> SequenceDescriptor:
         return SequenceDescriptor(
-            sequence_name=sequence_path.stem,
+            sequence_name=f"{self.dataset_id}_{sequence_path.stem}",
             sequence_metadata={
                 "dataset_id": self.dataset_id,
                 "source_file": sequence_path.name,

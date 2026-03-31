@@ -9,7 +9,7 @@ class EndEffectorAdapter(BaseAdapter):
     ontology_type = "end_effector"
 
     @classmethod
-    def translate(cls, payload: dict) -> dict:
+    def translate(cls, payload: dict) -> Message:
         return Message(
             timestamp_ns=int(payload["timestamp"] * 1e9),
             data=EndEffector(
