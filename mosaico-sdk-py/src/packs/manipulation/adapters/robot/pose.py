@@ -1,4 +1,4 @@
-from mosaicolabs import Message, Pose, Point3d, Quaternion
+from mosaicolabs import Message, Point3d, Pose, Quaternion
 from packs.manipulation.adapters.base import BaseAdapter
 
 

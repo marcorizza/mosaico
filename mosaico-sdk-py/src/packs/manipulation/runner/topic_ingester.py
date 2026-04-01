@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from threading import Event
 
+from mosaicolabs import TopicLevelErrorPolicy
 from packs.manipulation.adapters import build_default_adapter_registry
 from packs.manipulation.contracts import SequenceDescriptor, TopicDescriptor
 from packs.manipulation.runner.sequence_progress import SequenceProgress
@@ -34,6 +35,7 @@ class TopicIngester:
                     topic_name=topic.topic_name,
                     metadata=topic.metadata,
                     ontology_type=topic.ontology_type,
+                    on_error=TopicLevelErrorPolicy.Raise,
                 )
                 if writer is None:
                     ui.update_status(topic.topic_name, "Write Error", "red")
@@ -57,7 +59,9 @@ class TopicIngester:
         sequence_path: Path,
         topic_writers: list,
         ui: SequenceProgress,
+        missing_topic_sources: dict[str, tuple[str, ...]] | None = None,
     ) -> int:
+        missing_topic_sources = missing_topic_sources or {}
         stop_event = Event()
         total_messages = 0
         first_error = None
@@ -75,6 +79,7 @@ class TopicIngester:
                     adapter_cls,
                     ui,
                     stop_event,
+                    missing_paths=missing_topic_sources.get(topic.topic_name, ()),
                 ): topic
                 for topic, writer, adapter_cls in topic_writers
             }
@@ -106,7 +111,13 @@ class TopicIngester:
         adapter_cls,
         ui: SequenceProgress,
         stop_event: Event,
+        missing_paths: tuple[str, ...] = (),
     ) -> int:
+        if missing_paths:
+            ui.update_status(topic.topic_name, "Missing Source", "yellow")
+            ui.complete_topic(topic.topic_name)
+            return 0
+
         message_count = 0
         for payload in topic.payload_iter(sequence_path):
             if stop_event.is_set():

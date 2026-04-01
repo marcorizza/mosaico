@@ -1,12 +1,20 @@
 from pathlib import Path
 
-from mosaicolabs import RobotJoint, Pose, Velocity, ForceTorque, CompressedImage
-
+from mosaicolabs import CompressedImage, ForceTorque, Pose, RobotJoint, Velocity
 from packs.manipulation.contracts import SequenceDescriptor, TopicDescriptor
-from packs.manipulation.datasets.reassemble.iterators import *
+from packs.manipulation.datasets.reassemble.iterators import (
+    count_audio,
+    count_event_frames,
+    count_records,
+    count_video_frames,
+    iter_audio,
+    iter_event_frames,
+    iter_records,
+    iter_video_frames,
+)
 from packs.manipulation.ontology.audio import AudioDataStamped
-from packs.manipulation.ontology.event_camera import EventCamera
 from packs.manipulation.ontology.end_effector import EndEffector
+from packs.manipulation.ontology.event_camera import EventCamera
 
 
 class ReassemblePlugin:
@@ -44,6 +52,10 @@ class ReassemblePlugin:
                         "frame_sensor": "APS grayscale",
                         "datasheet": "https://inivation.com/wp-content/uploads/2019/08/DAVIS346.pdf",
                     },
+                    required_paths=(
+                        "capture_node-camera-image",
+                        "timestamps/capture_node-camera-image",
+                    ),
                 ),
                 TopicDescriptor(
                     topic_name="events",
@@ -61,6 +73,7 @@ class ReassemblePlugin:
                         "representation": "33ms event window with raw events",
                         "window_ms": 33,
                     },
+                    required_paths=("events", "timestamps/events"),
                 ),
                 TopicDescriptor(
                     topic_name="hama1",
@@ -71,6 +84,7 @@ class ReassemblePlugin:
                         timestamps_path="timestamps/hama1",
                     ),
                     message_count=count_video_frames("timestamps/hama1"),
+                    required_paths=("hama1", "timestamps/hama1"),
                 ),
                 TopicDescriptor(
                     topic_name="hama1_audio",
@@ -84,6 +98,7 @@ class ReassemblePlugin:
                         audio_path="hama1_audio",
                         timestamps_path="timestamps/hama1",
                     ),
+                    required_paths=("hama1_audio", "timestamps/hama1"),
                 ),
                 TopicDescriptor(
                     topic_name="hama2",
@@ -94,6 +109,7 @@ class ReassemblePlugin:
                         timestamps_path="timestamps/hama2",
                     ),
                     message_count=count_video_frames("timestamps/hama2"),
+                    required_paths=("hama2", "timestamps/hama2"),
                 ),
                 TopicDescriptor(
                     topic_name="hama2_audio",
@@ -107,6 +123,7 @@ class ReassemblePlugin:
                         audio_path="hama2_audio",
                         timestamps_path="timestamps/hama2",
                     ),
+                    required_paths=("hama2_audio", "timestamps/hama2"),
                 ),
                 TopicDescriptor(
                     topic_name="hand",
@@ -117,6 +134,7 @@ class ReassemblePlugin:
                         timestamps_path="timestamps/hand",
                     ),
                     message_count=count_video_frames("timestamps/hand"),
+                    required_paths=("hand", "timestamps/hand"),
                 ),
                 TopicDescriptor(
                     topic_name="hand_audio",
@@ -130,6 +148,7 @@ class ReassemblePlugin:
                         audio_path="hand_audio",
                         timestamps_path="timestamps/hand",
                     ),
+                    required_paths=("hand_audio", "timestamps/hand"),
                 ),
                 TopicDescriptor(
                     topic_name="robot_state/joint_state",
@@ -145,6 +164,12 @@ class ReassemblePlugin:
                     ),
                     message_count=count_records("timestamps/joint_positions"),
                     metadata={"n_joints": 7},
+                    required_paths=(
+                        "timestamps/joint_positions",
+                        "robot_state/joint_positions",
+                        "robot_state/joint_velocities",
+                        "robot_state/joint_efforts",
+                    ),
                 ),
                 TopicDescriptor(
                     topic_name="robot_state/pose",
@@ -155,6 +180,7 @@ class ReassemblePlugin:
                         fields={"pose": "robot_state/pose"},
                     ),
                     message_count=count_records("timestamps/pose"),
+                    required_paths=("timestamps/pose", "robot_state/pose"),
                 ),
                 TopicDescriptor(
                     topic_name="robot_state/velocity",
@@ -165,6 +191,7 @@ class ReassemblePlugin:
                         fields={"velocity": "robot_state/velocity"},
                     ),
                     message_count=count_records("timestamps/velocity"),
+                    required_paths=("timestamps/velocity", "robot_state/velocity"),
                 ),
                 TopicDescriptor(
                     topic_name="robot_state/compensated_base_force_torque",
@@ -177,8 +204,11 @@ class ReassemblePlugin:
                             "compensated_base_torque": "robot_state/compensated_base_torque",
                         },
                     ),
-                    message_count=count_records(
-                        "timestamps/compensated_base_force"
+                    message_count=count_records("timestamps/compensated_base_force"),
+                    required_paths=(
+                        "timestamps/compensated_base_force",
+                        "robot_state/compensated_base_force",
+                        "robot_state/compensated_base_torque",
                     ),
                 ),
                 TopicDescriptor(
@@ -193,6 +223,11 @@ class ReassemblePlugin:
                         },
                     ),
                     message_count=count_records("timestamps/measured_force"),
+                    required_paths=(
+                        "timestamps/measured_force",
+                        "robot_state/measured_force",
+                        "robot_state/measured_torque",
+                    ),
                 ),
                 TopicDescriptor(
                     topic_name="robot_state/end_effector",
@@ -207,6 +242,12 @@ class ReassemblePlugin:
                         },
                     ),
                     message_count=count_records("timestamps/gripper_efforts"),
-                )
+                    required_paths=(
+                        "timestamps/gripper_efforts",
+                        "robot_state/gripper_efforts",
+                        "robot_state/gripper_positions",
+                        "robot_state/gripper_velocities",
+                    ),
+                ),
             ],
         )

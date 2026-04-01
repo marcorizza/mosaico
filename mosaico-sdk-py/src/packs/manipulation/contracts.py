@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Protocol, Iterable
+from typing import Any, Callable, Iterable, Protocol
 
 from mosaicolabs.models import Serializable
 
@@ -13,6 +13,7 @@ class TopicDescriptor:
     payload_iter: Callable[[Path], Iterable[dict]]
     message_count: Callable[[Path], int]
     metadata: dict[str, Any] = field(default_factory=dict)
+    required_paths: tuple[str, ...] = field(default_factory=tuple)
 
 
 @dataclass

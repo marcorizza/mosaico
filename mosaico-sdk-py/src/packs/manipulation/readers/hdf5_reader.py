@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Iterable
 
 import h5py
 import numpy as np
@@ -20,6 +21,12 @@ class HDF5Reader:
             self._handle.close()
             self._handle = None
         return None
+
+    def missing_paths(self, paths: Iterable[str]) -> tuple[str, ...]:
+        if self._handle is None:
+            raise RuntimeError("HDF5Reader is not open")
+
+        return tuple(path for path in paths if path not in self._handle)
 
     def iter_records(self, timestamps_path: str, fields: dict[str, str]):
         if self._handle is None:
@@ -86,10 +93,7 @@ class HDF5Reader:
         return timestamps_ns, boundaries_ns, split_indices, num_windows
 
     def iter_event_frames(
-        self,
-        events_path: str,
-        timestamps_path: str,
-        window_seconds: float = 0.033
+        self, events_path: str, timestamps_path: str, window_seconds: float = 0.033
     ):
         if self._handle is None:
             raise RuntimeError("HDF5Reader is not open")
@@ -111,7 +115,9 @@ class HDF5Reader:
             event_timestamps_ns = timestamps_ns[start_idx:end_idx]
 
             yield {
-                "timestamp_ns": int(event_timestamps_ns[-1]) if end_idx > start_idx else w_end,
+                "timestamp_ns": int(event_timestamps_ns[-1])
+                if end_idx > start_idx
+                else w_end,
                 "t_start_ns": w_start,
                 "t_end_ns": w_end,
                 "events": events_dataset[start_idx:end_idx],

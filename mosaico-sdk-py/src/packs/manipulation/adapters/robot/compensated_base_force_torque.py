@@ -1,4 +1,4 @@
-from mosaicolabs import Message, ForceTorque, Vector3d
+from mosaicolabs import ForceTorque, Message, Vector3d
 from packs.manipulation.adapters.base import BaseAdapter
 
 

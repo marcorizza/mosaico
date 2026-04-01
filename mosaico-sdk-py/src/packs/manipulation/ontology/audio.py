@@ -1,6 +1,7 @@
-import pyarrow as pa
 from enum import Enum
 from typing import Optional
+
+import pyarrow as pa
 
 from mosaicolabs import Serializable
 
