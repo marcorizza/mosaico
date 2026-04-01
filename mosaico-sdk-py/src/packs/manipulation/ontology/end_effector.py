@@ -27,7 +27,7 @@ class EndEffector(Serializable):
             ),
         ]
     )
-    
+
     efforts: List[float]
     positions: List[float]
     velocities: List[float]

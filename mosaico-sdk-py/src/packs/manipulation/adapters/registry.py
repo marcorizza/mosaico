@@ -31,7 +31,7 @@ class AdapterRegistry:
 
     def all(self) -> dict[str, type[BaseAdapter]]:
         return dict(self._adapters)
-    
+
 
 def build_default_adapter_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
@@ -45,4 +45,3 @@ def build_default_adapter_registry() -> AdapterRegistry:
     registry.register(AudioAdapter)
     registry.register(EndEffectorAdapter)
     return registry
-

@@ -14,12 +14,12 @@ class VelocityAdapter(BaseAdapter):
                 linear=Vector3d(
                     x=payload["velocity"][0],
                     y=payload["velocity"][1],
-                    z=payload["velocity"][2]
+                    z=payload["velocity"][2],
                 ),
                 angular=Vector3d(
                     x=payload["velocity"][3],
                     y=payload["velocity"][4],
-                    z=payload["velocity"][5]
-                )
-            )
+                    z=payload["velocity"][5],
+                ),
+            ),
         )

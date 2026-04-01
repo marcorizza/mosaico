@@ -13,5 +13,5 @@ class VideoFrameAdapter(BaseAdapter):
             data=CompressedImage(
                 data=payload["image"],
                 format=ImageFormat.JPEG,
-            )
+            ),
         )

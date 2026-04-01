@@ -17,5 +17,5 @@ class JointStateAdapter(BaseAdapter):
                 positions=payload["position"],
                 velocities=payload["velocity"],
                 efforts=payload["effort"],
-            )
+            ),
         )

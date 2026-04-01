@@ -5,7 +5,7 @@ from .contracts import DatasetPlugin, SequenceDescriptor, TopicDescriptor
 
 __all__ = [
     "DatasetPlugin",
-    "SequenceDescriptor", 
+    "SequenceDescriptor",
     "TopicDescriptor",
     "ManipulationRunner",
     "BaseAdapter",
