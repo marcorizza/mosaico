@@ -1,4 +1,4 @@
-from mosaicolabs import Message, CompressedImage, ImageFormat
+from mosaicolabs import CompressedImage, ImageFormat, Message
 from packs.manipulation.adapters.base import BaseAdapter
 
 

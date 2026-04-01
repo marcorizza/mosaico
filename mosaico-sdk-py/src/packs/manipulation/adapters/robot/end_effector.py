@@ -1,5 +1,4 @@
 from mosaicolabs import Message
-
 from packs.manipulation.adapters.base import BaseAdapter
 from packs.manipulation.ontology.end_effector import EndEffector
 

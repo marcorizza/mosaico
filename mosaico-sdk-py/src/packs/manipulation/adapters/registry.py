@@ -1,16 +1,18 @@
+from packs.manipulation.adapters.audio.audio import AudioAdapter
 from packs.manipulation.adapters.base import BaseAdapter
-
-from packs.manipulation.adapters.robot.joint_state import JointStateAdapter
-from packs.manipulation.adapters.robot.pose import PoseAdapter
-from packs.manipulation.adapters.robot.velocity import VelocityAdapter
-from packs.manipulation.adapters.vision.video_frame import VideoFrameAdapter
-from packs.manipulation.adapters.vision.events import EventsAdapter
-from packs.manipulation.adapters.robot.measured_force_torque import MeasuredForceTorqueAdapter
 from packs.manipulation.adapters.robot.compensated_base_force_torque import (
     CompensatedBaseForceTorqueAdapter,
 )
-from packs.manipulation.adapters.audio.audio import AudioAdapter
 from packs.manipulation.adapters.robot.end_effector import EndEffectorAdapter
+from packs.manipulation.adapters.robot.joint_state import JointStateAdapter
+from packs.manipulation.adapters.robot.measured_force_torque import (
+    MeasuredForceTorqueAdapter,
+)
+from packs.manipulation.adapters.robot.pose import PoseAdapter
+from packs.manipulation.adapters.robot.velocity import VelocityAdapter
+from packs.manipulation.adapters.vision.events import EventsAdapter
+from packs.manipulation.adapters.vision.video_frame import VideoFrameAdapter
+
 
 class AdapterRegistry:
     def __init__(self) -> None:

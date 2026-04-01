@@ -1,4 +1,4 @@
-from mosaicolabs import Message, Velocity, Vector3d
+from mosaicolabs import Message, Vector3d, Velocity
 from packs.manipulation.adapters.base import BaseAdapter
 
 

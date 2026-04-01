@@ -1,7 +1,6 @@
 from mosaicolabs import Message
-
 from packs.manipulation.adapters.base import BaseAdapter
-from packs.manipulation.ontology.event_camera import EventCamera, Event
+from packs.manipulation.ontology.event_camera import Event, EventCamera
 
 
 class EventsAdapter(BaseAdapter):
