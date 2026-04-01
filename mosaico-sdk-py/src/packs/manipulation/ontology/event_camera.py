@@ -74,13 +74,17 @@ class EventCamera(Serializable):
                 "t_start_ns",
                 pa.int64(),
                 nullable=False,
-                metadata={"description": "Inclusive start timestamp of the event window."},
+                metadata={
+                    "description": "Inclusive start timestamp of the event window."
+                },
             ),
             pa.field(
                 "t_end_ns",
                 pa.int64(),
                 nullable=False,
-                metadata={"description": "Exclusive end timestamp of the event window."},
+                metadata={
+                    "description": "Exclusive end timestamp of the event window."
+                },
             ),
         ],
     )

@@ -14,12 +14,12 @@ class MeasuredForceTorqueAdapter(BaseAdapter):
                 force=Vector3d(
                     x=payload["measured_force"][0],
                     y=payload["measured_force"][1],
-                    z=payload["measured_force"][2]
+                    z=payload["measured_force"][2],
                 ),
                 torque=Vector3d(
                     x=payload["measured_torque"][0],
                     y=payload["measured_torque"][1],
-                    z=payload["measured_torque"][2]
-                )
-            )
+                    z=payload["measured_torque"][2],
+                ),
+            ),
         )

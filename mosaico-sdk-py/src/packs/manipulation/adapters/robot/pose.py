@@ -22,5 +22,5 @@ class PoseAdapter(BaseAdapter):
                     z=payload["pose"][5],
                     w=payload["pose"][6],
                 ),
-            )
+            ),
         )

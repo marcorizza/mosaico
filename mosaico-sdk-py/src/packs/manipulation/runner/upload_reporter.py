@@ -45,9 +45,7 @@ class UploadReporter:
     def print_verification(
         self, client: MosaicoClient, plans: list[SequenceDescriptor]
     ) -> None:
-        self.console.print(
-            Panel("[bold green]Verifying Data on Server[/bold green]")
-        )
+        self.console.print(Panel("[bold green]Verifying Data on Server[/bold green]"))
         for plan in plans:
             self._verify_single_sequence(client, plan)
 
@@ -71,7 +69,9 @@ class UploadReporter:
             self.console.print(f"  - {topic_name}")
         shandler.close()
 
-    def get_remote_sequence_size(self, client: MosaicoClient, sequence_name: str) -> int:
+    def get_remote_sequence_size(
+        self, client: MosaicoClient, sequence_name: str
+    ) -> int:
         shandler = client.sequence_handler(sequence_name)
         if shandler is None:
             raise RuntimeError(

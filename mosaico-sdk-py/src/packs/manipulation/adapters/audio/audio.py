@@ -15,5 +15,5 @@ class AudioAdapter(BaseAdapter):
                 audio_data=AudioData(
                     data=bytes(payload["audio"]),
                 ),
-            )
+            ),
         )
