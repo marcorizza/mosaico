@@ -2,7 +2,7 @@ from mosaicolabs import ForceTorque, Message, Vector3d
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 
 
-class CompensatedBaseForceTorqueAdapter(BaseAdapter):
+class ReassembleCompensatedBaseForceTorqueAdapter(BaseAdapter):
     adapter_id = "reassemble.compensated_base_force_torque"
     ontology_type = ForceTorque
 

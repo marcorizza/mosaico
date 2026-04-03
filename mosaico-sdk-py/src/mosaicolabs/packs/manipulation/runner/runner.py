@@ -12,7 +12,7 @@ from mosaicolabs.packs.manipulation.contracts import (
     RosbagSequenceDescriptor,
 )
 from mosaicolabs.packs.manipulation.datasets import build_default_dataset_registry
-from mosaicolabs.packs.manipulation.runner.native_executor import NativeSequenceExecutor
+from mosaicolabs.packs.manipulation.runner.file_executor import FileSequenceExecutor
 from mosaicolabs.packs.manipulation.runner.reports import (
     DatasetIngestionReport,
     SequenceIngestionResult,
@@ -29,7 +29,6 @@ class ManipulationRunner:
         console: Console | None = None,
         host: str = "localhost",
         port: int = 6276,
-        api_key: str | None = None,
         tls_cert_path: str | None = None,
         log_level: str = "INFO",
         stop_requested: Callable[[], bool] | None = None,
@@ -37,13 +36,12 @@ class ManipulationRunner:
         self.console = console or Console(stderr=True)
         self.dataset_registry = build_default_dataset_registry()
         self._stop_requested = stop_requested or (lambda: False)
-        self._native_executor = NativeSequenceExecutor(self.console)
+        self._file_executor = FileSequenceExecutor(self.console)
         self._rosbag_executor = RosbagSequenceExecutor(
             console=self.console,
             host=host,
             port=port,
             log_level=log_level,
-            api_key=api_key,
             tls_cert_path=tls_cert_path,
             stop_requested=self._stop_requested,
         )
@@ -63,34 +61,14 @@ class ManipulationRunner:
         )
 
         if self._stop_requested():
-            report = DatasetIngestionReport.interrupted_report(root=root)
-            report.duration_s = time.monotonic() - dataset_start
-            return report
+            return self._build_interrupted_report(root, dataset_start)
 
         if not root.exists():
-            report = DatasetIngestionReport.failed_report(
-                root=root,
-                error=f"Dataset root does not exist: {root}",
-            )
-            report.duration_s = time.monotonic() - dataset_start
-            LOGGER.error("%sDataset root does not exist: %s", dataset_label, root)
-            return report
+            return self._handle_missing_root(root, dataset_label, dataset_start)
 
-        try:
-            plugin = self.dataset_registry.resolve(root)
-            plugin_id = getattr(plugin, "dataset_id", type(plugin).__name__)
-            sequence_paths = list(plugin.discover_sequences(root))
-        except Exception:
-            LOGGER.exception(
-                "Failed to resolve dataset root %s; aborting this ingestion run.",
-                root,
-            )
-            return DatasetIngestionReport.failed_report(
-                root=root,
-                plugin_id="unresolved",
-                error=f"Failed to resolve dataset root '{root}'.",
-                duration_s=time.monotonic() - dataset_start,
-            )
+        plugin, plugin_id, sequence_paths = self._discover_sequences(root, dataset_start)
+        if isinstance(plugin, DatasetIngestionReport):
+            return plugin
 
         report = DatasetIngestionReport(
             root=root,
@@ -98,16 +76,7 @@ class ManipulationRunner:
             discovered=len(sequence_paths),
         )
 
-        try:
-            existing_sequences = set(client.list_sequences())
-        except Exception:
-            LOGGER.exception(
-                "Failed to list existing sequences; continuing without skip detection."
-            )
-            report.errors.append(
-                "Failed to list existing sequences; skip detection was disabled."
-            )
-            existing_sequences = set()
+        existing_sequences = self._get_existing_sequences(client, report)
 
         LOGGER.info(
             "%sDataset '%s' from %s with %d sequence(s)",
@@ -119,25 +88,93 @@ class ManipulationRunner:
         LOGGER.info("Found %d existing sequence(s) on server", len(existing_sequences))
 
         if not sequence_paths:
-            LOGGER.warning("No sequences discovered under %s", root)
-            report.duration_s = time.monotonic() - dataset_start
-            report.remote_size_bytes = 0
-            LOGGER.info(
-                "%sCompleted dataset '%s' — discovered=%d ingested=%d skipped=%d failed=%d duration=%.2fs",
-                dataset_label,
-                plugin_id,
-                report.discovered,
-                report.ingested,
-                report.skipped,
-                report.failed,
-                report.duration_s,
-            )
-            return report
+            return self._finalize_empty_report(report, dataset_label, dataset_start)
 
+        self._process_sequences(
+            sequence_paths,
+            plugin,
+            client,
+            existing_sequences,
+            report,
+        )
+
+        report.duration_s = time.monotonic() - dataset_start
+        report.finalize(interrupted=report.status == "interrupted" or self._stop_requested())
+        report.remote_size_bytes = self._resolve_remote_size(client, report)
+
+        LOGGER.info(
+            "%sCompleted dataset '%s' — discovered=%d ingested=%d skipped=%d failed=%d duration=%.2fs",
+            dataset_label,
+            plugin_id,
+            report.discovered,
+            report.ingested,
+            report.skipped,
+            report.failed,
+            report.duration_s,
+        )
+
+        return report
+
+    def _build_interrupted_report(self, root: Path, start_time: float) -> DatasetIngestionReport:
+        report = DatasetIngestionReport.interrupted_report(root=root)
+        report.duration_s = time.monotonic() - start_time
+        return report
+
+    def _handle_missing_root(self, root: Path, label: str, start_time: float) -> DatasetIngestionReport:
+        report = DatasetIngestionReport.failed_report(
+            root=root,
+            error=f"Dataset root does not exist: {root}",
+        )
+        report.duration_s = time.monotonic() - start_time
+        LOGGER.error("%sDataset root does not exist: %s", label, root)
+        return report
+
+    def _discover_sequences(self, root: Path, start_time: float) -> tuple | DatasetIngestionReport:
+        try:
+            plugin = self.dataset_registry.resolve(root)
+            plugin_id = getattr(plugin, "dataset_id", type(plugin).__name__)
+            sequence_paths = list(plugin.discover_sequences(root))
+            return plugin, plugin_id, sequence_paths
+        except Exception:
+            LOGGER.exception("Failed to resolve dataset root %s", root)
+            return DatasetIngestionReport.failed_report(
+                root=root,
+                plugin_id="unresolved",
+                error=f"Failed to resolve dataset root '{root}'.",
+                duration_s=time.monotonic() - start_time,
+            )
+
+    def _get_existing_sequences(self, client: MosaicoClient, report: DatasetIngestionReport) -> set[str]:
+        try:
+            return set(client.list_sequences())
+        except Exception:
+            LOGGER.exception(
+                "Failed to list existing sequences; continuing without skip detection."
+            )
+            report.errors.append("Failed to list existing sequences; skip detection was disabled.")
+            return set()
+
+    def _finalize_empty_report(self, report: DatasetIngestionReport, label: str, start_time: float) -> DatasetIngestionReport:
+        LOGGER.warning("No sequences discovered under %s", report.root)
+        report.duration_s = time.monotonic() - start_time
+        report.remote_size_bytes = 0
+        LOGGER.info(
+            "%sCompleted dataset '%s' — discovered=0 ingested=0 skipped=0 failed=0 duration=%.2fs",
+            label, report.plugin_id, report.duration_s
+        )
+        return report
+
+    def _process_sequences(
+        self,
+        sequence_paths: list[Path],
+        plugin: DatasetPlugin,
+        client: MosaicoClient,
+        existing_sequences: set[str],
+        report: DatasetIngestionReport,
+    ) -> None:
         for index, sequence_path in enumerate(sequence_paths, start=1):
             if self._stop_requested():
-                report.status = "interrupted"
-                report.errors.append("Interrupted by user.")
+                self._mark_report_interrupted(report)
                 break
 
             LOGGER.info(
@@ -154,8 +191,7 @@ class ManipulationRunner:
                     existing_sequences=existing_sequences,
                 )
             except KeyboardInterrupt:
-                report.status = "interrupted"
-                report.errors.append("Interrupted by user.")
+                self._mark_report_interrupted(report)
                 break
             except Exception:
                 LOGGER.exception(
@@ -170,27 +206,13 @@ class ManipulationRunner:
                 )
 
             report.record_sequence(sequence_result)
-
             if sequence_result.status == "interrupted":
-                report.status = "interrupted"
+                self._mark_report_interrupted(report)
                 break
 
-        report.duration_s = time.monotonic() - dataset_start
-        report.finalize(interrupted=report.status == "interrupted")
-        report.remote_size_bytes = self._resolve_remote_size(client, report)
-
-        LOGGER.info(
-            "%sCompleted dataset '%s' — discovered=%d ingested=%d skipped=%d failed=%d duration=%.2fs",
-            dataset_label,
-            plugin_id,
-            report.discovered,
-            report.ingested,
-            report.skipped,
-            report.failed,
-            report.duration_s,
-        )
-
-        return report
+    def _mark_report_interrupted(self, report: DatasetIngestionReport) -> None:
+        report.status = "interrupted"
+        report.errors.append("Interrupted by user.")
 
     def ingest_sequence(
         self,
@@ -210,24 +232,16 @@ class ManipulationRunner:
                 "Failed to create ingestion plan for sequence '%s'.",
                 sequence_path.name,
             )
-            return SequenceIngestionResult(
+            return self._build_sequence_error_result(
                 sequence_name=sequence_path.name,
-                status="failed",
-                local_size_bytes=local_size,
-                error=f"Failed to create ingestion plan for '{sequence_path.name}': {exc}",
+                local_size=local_size,
+                error=f"Failed to create ingestion plan for '{sequence_path.name}': {exc}"
             )
 
-        backend = getattr(plan, "backend", "native")
+        backend = getattr(plan, "backend", "file")
 
         if self._stop_requested():
-            return SequenceIngestionResult(
-                sequence_name=plan.sequence_name,
-                status="interrupted",
-                local_size_bytes=local_size,
-                backend=backend,
-                plan=plan,
-                error="Interrupted by user.",
-            )
+            return self._build_sequence_interrupted_result(plan, local_size, backend)
 
         try:
             if isinstance(plan, RosbagSequenceDescriptor):
@@ -237,65 +251,93 @@ class ManipulationRunner:
                     existing_sequences=existing_sequences,
                 )
             else:
-                ingested = self._native_executor.ingest_sequence(
+                ingested = self._file_executor.ingest_sequence(
                     sequence_path,
                     plan,
                     client=client,
                     existing_sequences=existing_sequences,
                 )
         except KeyboardInterrupt:
-            return SequenceIngestionResult(
-                sequence_name=plan.sequence_name,
-                status="interrupted",
-                local_size_bytes=local_size,
-                backend=backend,
-                plan=plan,
-                error="Interrupted by user.",
-            )
+            raise
         except Exception as exc:
             LOGGER.exception(
                 "Sequence '%s' failed; continuing with the next sequence.",
                 sequence_path.name,
             )
-            return SequenceIngestionResult(
+            return self._build_sequence_error_result(
                 sequence_name=plan.sequence_name,
-                status="failed",
-                local_size_bytes=local_size,
-                backend=backend,
-                plan=plan,
+                local_size=local_size,
                 error=f"Sequence '{plan.sequence_name}' failed: {exc}",
+                backend=backend,
+                plan=plan
             )
 
         if self._stop_requested():
-            return SequenceIngestionResult(
-                sequence_name=plan.sequence_name,
-                status="interrupted",
-                local_size_bytes=local_size,
-                backend=backend,
-                plan=plan,
-                error="Interrupted by user.",
-            )
-
-        if not ingested:
-            return SequenceIngestionResult(
-                sequence_name=plan.sequence_name,
-                status="skipped",
-                local_size_bytes=local_size,
-                backend=backend,
-                plan=plan,
-            )
+            return self._build_sequence_interrupted_result(plan, local_size, backend)
 
         return SequenceIngestionResult(
             sequence_name=plan.sequence_name,
-            status="ingested",
+            status="ingested" if ingested else "skipped",
             local_size_bytes=local_size,
             backend=backend,
             plan=plan,
         )
 
+    def _build_sequence_error_result(
+        self, sequence_name: str, local_size: int, error: str, backend: str | None = None, plan = None
+    ) -> SequenceIngestionResult:
+        return SequenceIngestionResult(
+            sequence_name=sequence_name,
+            status="failed",
+            local_size_bytes=local_size,
+            backend=backend,
+            plan=plan,
+            error=error,
+        )
+
+    def _build_sequence_interrupted_result(
+        self, plan, local_size: int, backend: str
+    ) -> SequenceIngestionResult:
+        return SequenceIngestionResult(
+            sequence_name=plan.sequence_name,
+            status="interrupted",
+            local_size_bytes=local_size,
+            backend=backend,
+            plan=plan,
+            error="Interrupted by user.",
+        )
+
     def _get_local_sequence_size(self, sequence_path: Path) -> int:
+        real_path = sequence_path
+        episode_count = 1
+
+        if "@@" in sequence_path.stem:
+            real_stem = sequence_path.stem.split("@@")[0]
+            real_path = sequence_path.with_name(f"{real_stem}{sequence_path.suffix}")
+
+            cache = getattr(self, "_episode_count_cache", None)
+            if cache is None:
+                self._episode_count_cache: dict[Path, int] = {}
+                cache = self._episode_count_cache
+
+            if real_path in cache:
+                episode_count = cache[real_path]
+            else:
+                try:
+                    import pyarrow.parquet as pq
+
+                    table = pq.read_table(real_path, columns=["episode_index"])
+                    episode_count = max(1, table.column("episode_index").n_unique())
+                except Exception:
+                    LOGGER.warning(
+                        "Could not count episodes in '%s'; using full file size.",
+                        real_path.name,
+                    )
+                    episode_count = 1
+                cache[real_path] = episode_count
+
         try:
-            return sequence_path.stat().st_size
+            return real_path.stat().st_size // episode_count
         except OSError:
             LOGGER.exception(
                 "Failed to read local size for sequence '%s'; using 0 bytes.",

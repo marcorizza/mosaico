@@ -31,7 +31,8 @@ class SequenceDescriptor:
     sequence_name: str
     sequence_metadata: dict[str, Any] = field(default_factory=dict)
     topics: list[TopicDescriptor] = field(default_factory=list)
-    backend: str = field(init=False, default="native")
+    find_missing_paths: Callable[[Path, tuple[str, ...]], tuple[str, ...]] | None = None
+    backend: str = field(init=False, default="file")
 
 
 @dataclass

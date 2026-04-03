@@ -1,13 +1,13 @@
-from .compensated_base_force_torque import CompensatedBaseForceTorqueAdapter
-from .joint_state import JointStateAdapter
-from .measured_force_torque import MeasuredForceTorqueAdapter
-from .pose import PoseAdapter
-from .velocity import VelocityAdapter
+from .compensated_base_force_torque import ReassembleCompensatedBaseForceTorqueAdapter
+from .joint_state import ReassembleJointStateAdapter
+from .measured_force_torque import ReassembleMeasuredForceTorqueAdapter
+from .pose import ReassemblePoseAdapter
+from .velocity import ReassembleVelocityAdapter
 
 __all__ = [
-    "JointStateAdapter",
-    "PoseAdapter",
-    "VelocityAdapter",
-    "MeasuredForceTorqueAdapter",
-    "CompensatedBaseForceTorqueAdapter",
+    "ReassembleJointStateAdapter",
+    "ReassemblePoseAdapter",
+    "ReassembleVelocityAdapter",
+    "ReassembleMeasuredForceTorqueAdapter",
+    "ReassembleCompensatedBaseForceTorqueAdapter",
 ]

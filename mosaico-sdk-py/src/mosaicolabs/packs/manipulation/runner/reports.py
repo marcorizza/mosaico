@@ -30,7 +30,6 @@ class DatasetIngestionReport:
     ingested: int = 0
     skipped: int = 0
     failed: int = 0
-    backend_counts: dict[str, int] = field(default_factory=dict)
     local_size_bytes: int = 0
     remote_size_bytes: int | None = None
     duration_s: float = 0.0
@@ -73,11 +72,6 @@ class DatasetIngestionReport:
 
     def record_sequence(self, result: SequenceIngestionResult) -> None:
         self.local_size_bytes += result.local_size_bytes
-
-        if result.backend:
-            self.backend_counts[result.backend] = (
-                self.backend_counts.get(result.backend, 0) + 1
-            )
 
         if result.status == "ingested":
             self.ingested += 1
@@ -162,11 +156,3 @@ class RunIngestionReport:
         if any(size is None for size in remote_sizes):
             return None
         return sum(size or 0 for size in remote_sizes)
-
-    @property
-    def backend_counts(self) -> dict[str, int]:
-        aggregated: dict[str, int] = {}
-        for report in self.datasets:
-            for backend, count in report.backend_counts.items():
-                aggregated[backend] = aggregated.get(backend, 0) + count
-        return aggregated

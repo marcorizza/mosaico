@@ -3,7 +3,7 @@ from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 from mosaicolabs.packs.manipulation.ontology.audio import AudioData, AudioDataStamped
 
 
-class AudioAdapter(BaseAdapter):
+class ReassembleAudioAdapter(BaseAdapter):
     adapter_id = "reassemble.audio"
     ontology_type = AudioDataStamped
 

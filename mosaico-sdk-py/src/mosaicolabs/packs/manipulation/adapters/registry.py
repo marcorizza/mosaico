@@ -1,26 +1,51 @@
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
-from mosaicolabs.packs.manipulation.adapters.reassemble.audio.audio import AudioAdapter
+from mosaicolabs.packs.manipulation.adapters.droid.robot.end_effector import (
+    DroidEndEffectorAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.droid.robot.joint_state import (
+    DroidJointStateAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.droid.robot.pose import (
+    DroidPoseAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.droid.scalar.boolean import (
+    DroidBooleanAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.droid.scalar.floating64 import (
+    DroidFloating64Adapter,
+)
+from mosaicolabs.packs.manipulation.adapters.droid.scalar.integer64 import (
+    DroidInteger64Adapter,
+)
+from mosaicolabs.packs.manipulation.adapters.droid.vision.video_frame import (
+    DroidVideoFrameAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.reassemble.audio.audio import (
+    ReassembleAudioAdapter,
+)
 from mosaicolabs.packs.manipulation.adapters.reassemble.robot.compensated_base_force_torque import (
-    CompensatedBaseForceTorqueAdapter,
+    ReassembleCompensatedBaseForceTorqueAdapter,
 )
 from mosaicolabs.packs.manipulation.adapters.reassemble.robot.end_effector import (
-    EndEffectorAdapter,
+    ReassembleEndEffectorAdapter,
 )
 from mosaicolabs.packs.manipulation.adapters.reassemble.robot.joint_state import (
-    JointStateAdapter,
+    ReassembleJointStateAdapter,
 )
 from mosaicolabs.packs.manipulation.adapters.reassemble.robot.measured_force_torque import (
-    MeasuredForceTorqueAdapter,
+    ReassembleMeasuredForceTorqueAdapter,
 )
-from mosaicolabs.packs.manipulation.adapters.reassemble.robot.pose import PoseAdapter
+from mosaicolabs.packs.manipulation.adapters.reassemble.robot.pose import (
+    ReassemblePoseAdapter,
+)
 from mosaicolabs.packs.manipulation.adapters.reassemble.robot.velocity import (
-    VelocityAdapter,
+    ReassembleVelocityAdapter,
 )
 from mosaicolabs.packs.manipulation.adapters.reassemble.vision.events import (
-    EventsAdapter,
+    ReassembleEventsAdapter,
 )
 from mosaicolabs.packs.manipulation.adapters.reassemble.vision.video_frame import (
-    VideoFrameAdapter,
+    ReassembleVideoFrameAdapter,
 )
 
 
@@ -45,13 +70,20 @@ class AdapterRegistry:
 
 def build_default_adapter_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
-    registry.register(JointStateAdapter)
-    registry.register(PoseAdapter)
-    registry.register(VelocityAdapter)
-    registry.register(VideoFrameAdapter)
-    registry.register(EventsAdapter)
-    registry.register(MeasuredForceTorqueAdapter)
-    registry.register(CompensatedBaseForceTorqueAdapter)
-    registry.register(AudioAdapter)
-    registry.register(EndEffectorAdapter)
+    registry.register(ReassembleJointStateAdapter)
+    registry.register(ReassemblePoseAdapter)
+    registry.register(ReassembleVelocityAdapter)
+    registry.register(ReassembleVideoFrameAdapter)
+    registry.register(ReassembleEventsAdapter)
+    registry.register(ReassembleMeasuredForceTorqueAdapter)
+    registry.register(ReassembleCompensatedBaseForceTorqueAdapter)
+    registry.register(ReassembleAudioAdapter)
+    registry.register(ReassembleEndEffectorAdapter)
+    registry.register(DroidJointStateAdapter)
+    registry.register(DroidPoseAdapter)
+    registry.register(DroidEndEffectorAdapter)
+    registry.register(DroidVideoFrameAdapter)
+    registry.register(DroidBooleanAdapter)
+    registry.register(DroidFloating64Adapter)
+    registry.register(DroidInteger64Adapter)
     return registry

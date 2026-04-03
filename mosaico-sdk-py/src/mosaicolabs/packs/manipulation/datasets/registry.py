@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from mosaicolabs.packs.manipulation.contracts import DatasetPlugin
+from mosaicolabs.packs.manipulation.datasets.droid import DROIDPlugin
 from mosaicolabs.packs.manipulation.datasets.mml import MMLPlugin
 from mosaicolabs.packs.manipulation.datasets.reassemble import ReassemblePlugin
 
@@ -23,4 +24,5 @@ def build_default_dataset_registry() -> DatasetRegistry:
     registry = DatasetRegistry()
     registry.register(ReassemblePlugin())
     registry.register(MMLPlugin())
+    registry.register(DROIDPlugin())
     return registry

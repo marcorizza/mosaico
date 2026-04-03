@@ -2,7 +2,7 @@ from mosaicolabs import Message, Point3d, Pose, Quaternion
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 
 
-class PoseAdapter(BaseAdapter):
+class ReassemblePoseAdapter(BaseAdapter):
     adapter_id = "reassemble.pose"
     ontology_type = Pose
 

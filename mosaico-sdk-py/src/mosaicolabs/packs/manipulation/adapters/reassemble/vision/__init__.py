@@ -1,7 +1,7 @@
-from .events import EventsAdapter
-from .video_frame import VideoFrameAdapter
+from .events import ReassembleEventsAdapter
+from .video_frame import ReassembleVideoFrameAdapter
 
 __all__ = [
-    "VideoFrameAdapter",
-    "EventsAdapter",
+    "ReassembleVideoFrameAdapter",
+    "ReassembleEventsAdapter",
 ]

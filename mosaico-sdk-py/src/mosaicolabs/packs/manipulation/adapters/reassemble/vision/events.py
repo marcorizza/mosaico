@@ -3,7 +3,7 @@ from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 from mosaicolabs.packs.manipulation.ontology.event_camera import Event, EventCamera
 
 
-class EventsAdapter(BaseAdapter):
+class ReassembleEventsAdapter(BaseAdapter):
     adapter_id = "reassemble.events"
     ontology_type = EventCamera
 

@@ -2,7 +2,7 @@ from mosaicolabs import ForceTorque, Message, Vector3d
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 
 
-class MeasuredForceTorqueAdapter(BaseAdapter):
+class ReassembleMeasuredForceTorqueAdapter(BaseAdapter):
     adapter_id = "reassemble.measured_force_torque"
     ontology_type = ForceTorque
 
