@@ -2,7 +2,7 @@ from mosaicolabs import Message, Vector3d, Velocity
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 
 
-class VelocityAdapter(BaseAdapter):
+class ReassembleVelocityAdapter(BaseAdapter):
     adapter_id = "reassemble.velocity"
     ontology_type = Velocity
 

@@ -19,7 +19,6 @@ class RosbagSequenceExecutor:
         host: str,
         port: int,
         log_level: str = "INFO",
-        api_key: str | None = None,
         tls_cert_path: str | None = None,
         stop_requested: Callable[[], bool] | None = None,
     ) -> None:
@@ -27,7 +26,6 @@ class RosbagSequenceExecutor:
         self.host = host
         self.port = port
         self.log_level = log_level
-        self.api_key = api_key
         self.tls_cert_path = tls_cert_path
         self._stop_requested = stop_requested or (lambda: False)
 
@@ -88,7 +86,6 @@ class RosbagSequenceExecutor:
             topics=resolved_topics,
             adapter_overrides=resolved_overrides,
             log_level=self.log_level,
-            mosaico_api_key=self.api_key,
             tls_cert_path=self.tls_cert_path,
         )
         return config, total_messages

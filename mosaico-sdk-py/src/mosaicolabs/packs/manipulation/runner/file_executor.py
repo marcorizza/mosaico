@@ -3,14 +3,13 @@ from pathlib import Path
 
 from mosaicolabs import OnErrorPolicy
 from mosaicolabs.packs.manipulation.contracts import SequenceDescriptor
-from mosaicolabs.packs.manipulation.readers import HDF5Reader
 from mosaicolabs.packs.manipulation.runner.sequence_progress import SequenceProgress
 from mosaicolabs.packs.manipulation.runner.topic_ingester import TopicIngester
 
 LOGGER = logging.getLogger(__name__)
 
 
-class NativeSequenceExecutor:
+class FileSequenceExecutor:
     def __init__(self, console) -> None:
         self.console = console
         self._ingester = TopicIngester()
@@ -29,7 +28,7 @@ class NativeSequenceExecutor:
             return False
 
         LOGGER.info(
-            "Creating native sequence '%s' from %s with %d topic(s)",
+            "Creating file sequence '%s' from %s with %d topic(s)",
             plan.sequence_name,
             sequence_path.name,
             len(plan.topics),
@@ -62,7 +61,7 @@ class NativeSequenceExecutor:
                 )
 
         LOGGER.info(
-            "Completed native sequence '%s' — %d topic(s), %d message(s)",
+            "Completed file sequence '%s' — %d topic(s), %d message(s)",
             plan.sequence_name,
             len(plan.topics),
             total_messages,
@@ -80,22 +79,24 @@ class NativeSequenceExecutor:
     ) -> dict[str, tuple[str, ...]]:
         missing_topic_sources: dict[str, tuple[str, ...]] = {}
 
-        with HDF5Reader(sequence_path) as reader:
-            for topic in plan.topics:
-                if not topic.required_paths:
-                    continue
+        if not plan.find_missing_paths:
+            return missing_topic_sources
 
-                missing_paths = reader.missing_paths(topic.required_paths)
-                if not missing_paths:
-                    continue
+        for topic in plan.topics:
+            if not topic.required_paths:
+                continue
 
-                missing_topic_sources[topic.topic_name] = missing_paths
-                missing_list = ", ".join(missing_paths)
-                LOGGER.warning(
-                    "Topic '%s' is missing source path(s) [%s] in '%s'; creating it empty.",
-                    topic.topic_name,
-                    missing_list,
-                    sequence_path.name,
-                )
+            missing_paths = plan.find_missing_paths(sequence_path, topic.required_paths)
+            if not missing_paths:
+                continue
+
+            missing_topic_sources[topic.topic_name] = tuple(missing_paths)
+            missing_list = ", ".join(missing_paths)
+            LOGGER.warning(
+                "Topic '%s' is missing source path(s) [%s] in '%s'; creating it empty.",
+                topic.topic_name,
+                missing_list,
+                sequence_path.name,
+            )
 
         return missing_topic_sources

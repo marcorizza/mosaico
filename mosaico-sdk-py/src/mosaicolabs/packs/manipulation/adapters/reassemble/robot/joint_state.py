@@ -2,7 +2,7 @@ from mosaicolabs import Message, RobotJoint
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 
 
-class JointStateAdapter(BaseAdapter):
+class ReassembleJointStateAdapter(BaseAdapter):
     adapter_id = "reassemble.joint_state"
     ontology_type = RobotJoint
 

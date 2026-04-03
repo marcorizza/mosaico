@@ -2,8 +2,8 @@ from mosaicolabs import CompressedImage, ImageFormat, Message
 from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 
 
-class ReassembleVideoFrameAdapter(BaseAdapter):
-    adapter_id = "reassemble.video_frame"
+class DroidVideoFrameAdapter(BaseAdapter):
+    adapter_id = "droid.video_frame"
     ontology_type = CompressedImage
 
     @classmethod

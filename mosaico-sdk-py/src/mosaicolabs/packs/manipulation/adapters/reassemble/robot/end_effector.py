@@ -3,7 +3,7 @@ from mosaicolabs.packs.manipulation.adapters.base import BaseAdapter
 from mosaicolabs.packs.manipulation.ontology.end_effector import EndEffector
 
 
-class EndEffectorAdapter(BaseAdapter):
+class ReassembleEndEffectorAdapter(BaseAdapter):
     adapter_id = "reassemble.end_effector"
     ontology_type = "end_effector"
 

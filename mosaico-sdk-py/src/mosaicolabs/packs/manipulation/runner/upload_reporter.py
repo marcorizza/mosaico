@@ -170,15 +170,7 @@ class UploadReporter:
         return f"{error[: max_length - 3]}..."
 
     def _build_size_summary(self, original_size: int, remote_size: int | None) -> str:
-        if remote_size is None:
-            return (
-                f"Original Size: [bold]{self._format_size_mb(original_size):.2f} MB[/bold]\n"
-                f"Remote Size:   {self._format_remote_size(remote_size)}\n"
-                "Ratio:         [dim]unavailable[/dim]\n"
-                "Space Saved:   [dim]unavailable[/dim]"
-            )
-
-        if original_size <= 0 or remote_size <= 0:
+        if remote_size is None or original_size <= 0 or remote_size <= 0:
             return (
                 f"Original Size: [bold]{self._format_size_mb(original_size):.2f} MB[/bold]\n"
                 f"Remote Size:   {self._format_remote_size(remote_size)}\n"

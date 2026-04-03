@@ -41,32 +41,36 @@ def configure_logging(level: str, console: Console) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Ingest manipulation datasets into Mosaico."
+        description="Ingest manipulation datasets into Mosaico.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
         "--datasets",
         nargs="+",
         type=Path,
         required=True,
+        metavar="DIR",
         help="One or more dataset roots to ingest.",
     )
-    parser.add_argument("--host", default=MOSAICO_HOST, help="Mosaico server host")
+    parser.add_argument(
+        "--host", 
+        default=MOSAICO_HOST, 
+        metavar="ADDR", 
+        help="Mosaico server host",
+    )
     parser.add_argument(
         "--port",
         default=MOSAICO_PORT,
         type=int,
+        metavar="PORT",
         help="Mosaico server port",
     )
     parser.add_argument(
         "--log-level",
         default="INFO",
         choices=LOG_LEVELS,
-        help="Logging verbosity",
-    )
-    parser.add_argument(
-        "--api-key",
-        default=None,
-        help="Mosaico API key",
+        metavar="LEVEL",
+        help=f"Logging verbosity (choices: {', '.join(LOG_LEVELS)})",
     )
     return parser.parse_args()
 
@@ -81,7 +85,6 @@ def run_pipeline(args: argparse.Namespace) -> int:
         console=console,
         host=args.host,
         port=args.port,
-        api_key=args.api_key,
         log_level=args.log_level,
         stop_requested=stop_controller,
     )
@@ -113,7 +116,6 @@ def run_pipeline(args: argparse.Namespace) -> int:
                 with MosaicoClient.connect(
                     host=args.host,
                     port=args.port,
-                    api_key=args.api_key,
                 ) as client:
                     report = runner.ingest_root(
                         dataset_root,

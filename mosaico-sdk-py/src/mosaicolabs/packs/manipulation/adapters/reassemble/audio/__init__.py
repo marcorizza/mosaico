@@ -1,5 +1,5 @@
-from .audio import AudioAdapter
+from .audio import ReassembleAudioAdapter
 
 __all__ = [
-    "AudioAdapter",
+    "ReassembleAudioAdapter",
 ]

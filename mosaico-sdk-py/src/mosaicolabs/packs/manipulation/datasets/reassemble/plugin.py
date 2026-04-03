@@ -26,14 +26,20 @@ class ReassemblePlugin:
     def discover_sequences(self, root: Path) -> list[Path]:
         return sorted(root.glob("*.h5"))
 
+    def _find_missing_paths(self, sequence_path: Path, required_paths: tuple[str, ...]) -> tuple[str, ...]:
+        from mosaicolabs.packs.manipulation.readers import HDF5Reader
+        with HDF5Reader(sequence_path) as reader:
+            return reader.missing_paths(required_paths)
+
     def create_ingestion_plan(self, sequence_path: Path) -> SequenceDescriptor:
         return SequenceDescriptor(
             sequence_name=f"{self.dataset_id}_{sequence_path.stem}",
             sequence_metadata={
                 "dataset_id": self.dataset_id,
-                "ingestion_backend": "native",
+                "ingestion_backend": "file",
                 "source_file": sequence_path.name,
             },
+            find_missing_paths=self._find_missing_paths,
             topics=[
                 TopicDescriptor(
                     topic_name="capture_node-camera-image",
