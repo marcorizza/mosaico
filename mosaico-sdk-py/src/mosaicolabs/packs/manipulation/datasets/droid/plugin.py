@@ -82,7 +82,9 @@ class DROIDPlugin:
 
         return metadata
 
-    def _find_missing_paths(self, sequence_path: Path, required_paths: tuple[str, ...]) -> tuple[str, ...]:
+    def _find_missing_paths(
+        self, sequence_path: Path, required_paths: tuple[str, ...]
+    ) -> tuple[str, ...]:
         import pyarrow.dataset as ds
 
         real_path = sequence_path

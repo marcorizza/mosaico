@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from mosaicolabs.packs.manipulation.runner.reports import (
+from mosaicolabs.packs.manipulation.runner.reporters.reports import (
     DatasetIngestionReport,
     RunIngestionReport,
 )
