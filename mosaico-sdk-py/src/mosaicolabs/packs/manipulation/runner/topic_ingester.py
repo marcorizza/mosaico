@@ -6,7 +6,9 @@ from threading import Event
 from mosaicolabs import TopicLevelErrorPolicy
 from mosaicolabs.packs.manipulation.adapters import build_default_adapter_registry
 from mosaicolabs.packs.manipulation.contracts import SequenceDescriptor, TopicDescriptor
-from mosaicolabs.packs.manipulation.runner.sequence_progress import SequenceProgress
+from mosaicolabs.packs.manipulation.runner.reporters.sequence_progress import (
+    SequenceProgress,
+)
 
 LOGGER = logging.getLogger(__name__)
 

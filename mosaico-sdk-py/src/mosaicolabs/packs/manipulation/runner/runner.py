@@ -12,12 +12,16 @@ from mosaicolabs.packs.manipulation.contracts import (
     RosbagSequenceDescriptor,
 )
 from mosaicolabs.packs.manipulation.datasets import build_default_dataset_registry
-from mosaicolabs.packs.manipulation.runner.file_executor import FileSequenceExecutor
-from mosaicolabs.packs.manipulation.runner.reports import (
+from mosaicolabs.packs.manipulation.runner.executors.file_executor import (
+    FileSequenceExecutor,
+)
+from mosaicolabs.packs.manipulation.runner.executors.rosbag_executor import (
+    RosbagSequenceExecutor,
+)
+from mosaicolabs.packs.manipulation.runner.reporters.reports import (
     DatasetIngestionReport,
     SequenceIngestionResult,
 )
-from mosaicolabs.packs.manipulation.runner.rosbag_executor import RosbagSequenceExecutor
 from mosaicolabs.platform.helpers import _decode_app_metadata
 
 LOGGER = logging.getLogger(__name__)
@@ -66,7 +70,9 @@ class ManipulationRunner:
         if not root.exists():
             return self._handle_missing_root(root, dataset_label, dataset_start)
 
-        plugin, plugin_id, sequence_paths = self._discover_sequences(root, dataset_start)
+        plugin, plugin_id, sequence_paths = self._discover_sequences(
+            root, dataset_start
+        )
         if isinstance(plugin, DatasetIngestionReport):
             return plugin
 
@@ -99,7 +105,9 @@ class ManipulationRunner:
         )
 
         report.duration_s = time.monotonic() - dataset_start
-        report.finalize(interrupted=report.status == "interrupted" or self._stop_requested())
+        report.finalize(
+            interrupted=report.status == "interrupted" or self._stop_requested()
+        )
         report.remote_size_bytes = self._resolve_remote_size(client, report)
 
         LOGGER.info(
@@ -115,12 +123,16 @@ class ManipulationRunner:
 
         return report
 
-    def _build_interrupted_report(self, root: Path, start_time: float) -> DatasetIngestionReport:
+    def _build_interrupted_report(
+        self, root: Path, start_time: float
+    ) -> DatasetIngestionReport:
         report = DatasetIngestionReport.interrupted_report(root=root)
         report.duration_s = time.monotonic() - start_time
         return report
 
-    def _handle_missing_root(self, root: Path, label: str, start_time: float) -> DatasetIngestionReport:
+    def _handle_missing_root(
+        self, root: Path, label: str, start_time: float
+    ) -> DatasetIngestionReport:
         report = DatasetIngestionReport.failed_report(
             root=root,
             error=f"Dataset root does not exist: {root}",
@@ -129,7 +141,9 @@ class ManipulationRunner:
         LOGGER.error("%sDataset root does not exist: %s", label, root)
         return report
 
-    def _discover_sequences(self, root: Path, start_time: float) -> tuple | DatasetIngestionReport:
+    def _discover_sequences(
+        self, root: Path, start_time: float
+    ) -> tuple | DatasetIngestionReport:
         try:
             plugin = self.dataset_registry.resolve(root)
             plugin_id = getattr(plugin, "dataset_id", type(plugin).__name__)
@@ -144,23 +158,31 @@ class ManipulationRunner:
                 duration_s=time.monotonic() - start_time,
             )
 
-    def _get_existing_sequences(self, client: MosaicoClient, report: DatasetIngestionReport) -> set[str]:
+    def _get_existing_sequences(
+        self, client: MosaicoClient, report: DatasetIngestionReport
+    ) -> set[str]:
         try:
             return set(client.list_sequences())
         except Exception:
             LOGGER.exception(
                 "Failed to list existing sequences; continuing without skip detection."
             )
-            report.errors.append("Failed to list existing sequences; skip detection was disabled.")
+            report.errors.append(
+                "Failed to list existing sequences; skip detection was disabled."
+            )
             return set()
 
-    def _finalize_empty_report(self, report: DatasetIngestionReport, label: str, start_time: float) -> DatasetIngestionReport:
+    def _finalize_empty_report(
+        self, report: DatasetIngestionReport, label: str, start_time: float
+    ) -> DatasetIngestionReport:
         LOGGER.warning("No sequences discovered under %s", report.root)
         report.duration_s = time.monotonic() - start_time
         report.remote_size_bytes = 0
         LOGGER.info(
             "%sCompleted dataset '%s' — discovered=0 ingested=0 skipped=0 failed=0 duration=%.2fs",
-            label, report.plugin_id, report.duration_s
+            label,
+            report.plugin_id,
+            report.duration_s,
         )
         return report
 
@@ -235,7 +257,7 @@ class ManipulationRunner:
             return self._build_sequence_error_result(
                 sequence_name=sequence_path.name,
                 local_size=local_size,
-                error=f"Failed to create ingestion plan for '{sequence_path.name}': {exc}"
+                error=f"Failed to create ingestion plan for '{sequence_path.name}': {exc}",
             )
 
         backend = getattr(plan, "backend", "file")
@@ -269,7 +291,7 @@ class ManipulationRunner:
                 local_size=local_size,
                 error=f"Sequence '{plan.sequence_name}' failed: {exc}",
                 backend=backend,
-                plan=plan
+                plan=plan,
             )
 
         if self._stop_requested():
@@ -284,7 +306,12 @@ class ManipulationRunner:
         )
 
     def _build_sequence_error_result(
-        self, sequence_name: str, local_size: int, error: str, backend: str | None = None, plan = None
+        self,
+        sequence_name: str,
+        local_size: int,
+        error: str,
+        backend: str | None = None,
+        plan=None,
     ) -> SequenceIngestionResult:
         return SequenceIngestionResult(
             sequence_name=sequence_name,

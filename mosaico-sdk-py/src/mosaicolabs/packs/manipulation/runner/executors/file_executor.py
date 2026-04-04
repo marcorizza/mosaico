@@ -3,7 +3,9 @@ from pathlib import Path
 
 from mosaicolabs import OnErrorPolicy
 from mosaicolabs.packs.manipulation.contracts import SequenceDescriptor
-from mosaicolabs.packs.manipulation.runner.sequence_progress import SequenceProgress
+from mosaicolabs.packs.manipulation.runner.reporters.sequence_progress import (
+    SequenceProgress,
+)
 from mosaicolabs.packs.manipulation.runner.topic_ingester import TopicIngester
 
 LOGGER = logging.getLogger(__name__)
