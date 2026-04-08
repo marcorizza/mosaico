@@ -66,7 +66,6 @@ class TopicIngester:
         missing_topic_sources = missing_topic_sources or {}
         stop_event = Event()
         total_messages = 0
-        first_error = None
 
         with ThreadPoolExecutor(
             max_workers=max(1, len(topic_writers)),
@@ -91,16 +90,13 @@ class TopicIngester:
                 try:
                     total_messages += future.result()
                 except Exception as exc:
-                    stop_event.set()
+                    LOGGER.error(
+                        "Topic '%s' failed during ingestion: %s",
+                        topic.topic_name,
+                        exc,
+                        exc_info=True,
+                    )
                     ui.update_status(topic.topic_name, "Write Error", "red")
-                    if first_error is None:
-                        first_error = RuntimeError(
-                            f"Topic '{topic.topic_name}' failed during ingestion"
-                        )
-                        first_error.__cause__ = exc
-
-        if first_error is not None:
-            raise first_error
 
         ui.complete_all()
         return total_messages
