@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Protocol, TypeAlias
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Literal, Protocol, TypeAlias
 
 from mosaicolabs.models import Serializable
 
@@ -46,6 +46,7 @@ class RosbagSequenceDescriptor:
 
 
 IngestionDescriptor: TypeAlias = SequenceDescriptor | RosbagSequenceDescriptor
+WriteMode: TypeAlias = Literal["sync", "async"]
 
 
 class DatasetPlugin(Protocol):

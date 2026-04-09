@@ -5,7 +5,11 @@ from threading import Event
 
 from mosaicolabs import TopicLevelErrorPolicy
 from mosaicolabs.packs.manipulation.adapters import build_default_adapter_registry
-from mosaicolabs.packs.manipulation.contracts import SequenceDescriptor, TopicDescriptor
+from mosaicolabs.packs.manipulation.contracts import (
+    SequenceDescriptor,
+    TopicDescriptor,
+    WriteMode,
+)
 from mosaicolabs.packs.manipulation.runner.reporters.sequence_progress import (
     SequenceProgress,
 )
@@ -14,8 +18,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TopicIngester:
-    def __init__(self) -> None:
+    def __init__(self, write_mode: WriteMode = "async") -> None:
         self.adapter_registry = build_default_adapter_registry()
+        self._write_mode = write_mode
 
     def prepare_topic_writers(
         self,
@@ -55,6 +60,28 @@ class TopicIngester:
             topic_writers.append((topic, writer, adapter_cls))
 
         return topic_writers
+
+    def run_ingestion(
+        self,
+        sequence_path: Path,
+        topic_writers: list,
+        ui: SequenceProgress,
+        missing_topic_sources: dict[str, tuple[str, ...]] | None = None,
+    ) -> int:
+        if self._write_mode == "sync":
+            return self.run_sequential_ingestion(
+                sequence_path,
+                topic_writers,
+                ui,
+                missing_topic_sources=missing_topic_sources,
+            )
+
+        return self.run_parallel_ingestion(
+            sequence_path,
+            topic_writers,
+            ui,
+            missing_topic_sources=missing_topic_sources,
+        )
 
     def run_parallel_ingestion(
         self,
@@ -97,6 +124,40 @@ class TopicIngester:
                         exc_info=True,
                     )
                     ui.update_status(topic.topic_name, "Write Error", "red")
+
+        ui.complete_all()
+        return total_messages
+
+    def run_sequential_ingestion(
+        self,
+        sequence_path: Path,
+        topic_writers: list,
+        ui: SequenceProgress,
+        missing_topic_sources: dict[str, tuple[str, ...]] | None = None,
+    ) -> int:
+        missing_topic_sources = missing_topic_sources or {}
+        stop_event = Event()
+        total_messages = 0
+
+        for topic, writer, adapter_cls in topic_writers:
+            try:
+                total_messages += self._ingest_topic(
+                    sequence_path,
+                    topic,
+                    writer,
+                    adapter_cls,
+                    ui,
+                    stop_event,
+                    missing_paths=missing_topic_sources.get(topic.topic_name, ()),
+                )
+            except Exception as exc:
+                LOGGER.error(
+                    "Topic '%s' failed during ingestion: %s",
+                    topic.topic_name,
+                    exc,
+                    exc_info=True,
+                )
+                ui.update_status(topic.topic_name, "Write Error", "red")
 
         ui.complete_all()
         return total_messages

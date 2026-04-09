@@ -19,10 +19,12 @@ class UploadReporter:
         dataset_roots: list[Path],
         host: str,
         port: int,
+        write_mode: str,
     ) -> None:
         body = (
             f"Datasets:     [bold]{len(dataset_roots)}[/bold]\n"
-            f"Destination:  [bold]{host}:{port}[/bold]"
+            f"Destination:  [bold]{host}:{port}[/bold]\n"
+            f"Write Mode:   [bold]{write_mode}[/bold]"
         )
         self.console.print(
             Panel(

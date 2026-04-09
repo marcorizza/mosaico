@@ -10,6 +10,7 @@ from mosaicolabs.handlers.sequence_handler import SequenceHandler
 from mosaicolabs.packs.manipulation.contracts import (
     DatasetPlugin,
     RosbagSequenceDescriptor,
+    WriteMode,
 )
 from mosaicolabs.packs.manipulation.datasets import (
     DatasetRegistry,
@@ -38,13 +39,17 @@ class ManipulationRunner:
         port: int = 6276,
         tls_cert_path: str | None = None,
         log_level: str = "INFO",
+        write_mode: WriteMode = "async",
         stop_requested: Callable[[], bool] | None = None,
         dataset_registry: DatasetRegistry | None = None,
     ) -> None:
         self.console = console or Console(stderr=True)
         self.dataset_registry = dataset_registry or build_default_dataset_registry()
         self._stop_requested = stop_requested or (lambda: False)
-        self._file_executor = FileSequenceExecutor(self.console)
+        self._file_executor = FileSequenceExecutor(
+            self.console,
+            write_mode=write_mode,
+        )
         self._rosbag_executor = RosbagSequenceExecutor(
             console=self.console,
             host=host,

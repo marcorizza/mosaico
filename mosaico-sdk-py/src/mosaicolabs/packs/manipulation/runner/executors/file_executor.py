@@ -2,7 +2,7 @@ import logging
 from pathlib import Path
 
 from mosaicolabs import OnErrorPolicy
-from mosaicolabs.packs.manipulation.contracts import SequenceDescriptor
+from mosaicolabs.packs.manipulation.contracts import SequenceDescriptor, WriteMode
 from mosaicolabs.packs.manipulation.runner.reporters.sequence_progress import (
     SequenceProgress,
 )
@@ -12,9 +12,10 @@ LOGGER = logging.getLogger(__name__)
 
 
 class FileSequenceExecutor:
-    def __init__(self, console) -> None:
+    def __init__(self, console, write_mode: WriteMode = "async") -> None:
         self.console = console
-        self._ingester = TopicIngester()
+        self._write_mode = write_mode
+        self._ingester = TopicIngester(write_mode=write_mode)
 
     def ingest_sequence(
         self,
@@ -30,10 +31,11 @@ class FileSequenceExecutor:
             return False
 
         LOGGER.info(
-            "Creating file sequence '%s' from %s with %d topic(s)",
+            "Creating file sequence '%s' from %s with %d topic(s) using %s topic ingestion",
             plan.sequence_name,
             sequence_path.name,
             len(plan.topics),
+            self._write_mode,
         )
 
         missing_topic_sources = self._find_missing_topic_sources(sequence_path, plan)
@@ -55,7 +57,7 @@ class FileSequenceExecutor:
         ) as swriter:
             with ui.live():
                 topic_writers = self._ingester.prepare_topic_writers(swriter, plan, ui)
-                total_messages = self._ingester.run_parallel_ingestion(
+                total_messages = self._ingester.run_ingestion(
                     sequence_path,
                     topic_writers,
                     ui,

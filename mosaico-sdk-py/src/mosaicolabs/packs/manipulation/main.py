@@ -2,6 +2,7 @@ import argparse
 import logging
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,7 +12,7 @@ from rich.prompt import Prompt
 
 from mosaicolabs import MosaicoClient, setup_sdk_logging
 from mosaicolabs.packs.configs import MOSAICO_HOST, MOSAICO_PORT
-from mosaicolabs.packs.manipulation.contracts import DatasetPlugin
+from mosaicolabs.packs.manipulation.contracts import DatasetPlugin, WriteMode
 from mosaicolabs.packs.manipulation.datasets import (
     DatasetRegistry,
     build_default_dataset_registry,
@@ -28,6 +29,7 @@ from mosaicolabs.packs.manipulation.runner.stop_controller import StopController
 
 LOGGER = logging.getLogger(__name__)
 LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
+WRITE_MODES: tuple[WriteMode, ...] = ("sync", "async")
 
 
 @dataclass(frozen=True)
@@ -69,7 +71,7 @@ def configure_logging(
         logging.getLogger("mosaicolabs").addHandler(file_handler)
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Ingest manipulation datasets into Mosaico.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -109,7 +111,14 @@ def parse_args() -> argparse.Namespace:
         metavar="FILE",
         help="Optional path to a log file. Logs are written to both console and file.",
     )
-    return parser.parse_args()
+    parser.add_argument(
+        "--write-mode",
+        default="async",
+        choices=WRITE_MODES,
+        metavar="MODE",
+        help="Topic ingestion mode: 'sync' disables topic threads, 'async' keeps parallel topic ingestion.",
+    )
+    return parser.parse_args(argv)
 
 
 def _is_interactive_terminal(console: Console) -> bool:
@@ -201,13 +210,14 @@ def run_pipeline(args: argparse.Namespace) -> int:
         host=args.host,
         port=args.port,
         log_level=args.log_level,
+        write_mode=args.write_mode,
         stop_requested=stop_controller,
         dataset_registry=dataset_registry,
     )
 
     dataset_reports: list[DatasetIngestionReport] = []
     run_start = time.monotonic()
-    reporter.print_run_header(args.datasets, args.host, args.port)
+    reporter.print_run_header(args.datasets, args.host, args.port, args.write_mode)
 
     stop_controller.install()
     try:
