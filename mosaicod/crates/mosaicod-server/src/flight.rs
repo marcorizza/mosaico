@@ -134,8 +134,8 @@ pub async fn start(
     }
 
     svc = svc
-        .max_decoding_message_size(params::params().max_message_size_in_bytes)
-        .max_encoding_message_size(params::params().max_message_size_in_bytes);
+        .max_decoding_message_size(params::params().max_grpc_message_size)
+        .max_encoding_message_size(params::params().max_grpc_message_size);
 
     let server = builder.layer(layer).add_service(svc);
 
@@ -159,6 +159,9 @@ struct MosaicodFlight {
     ts_gw: query::TimeseriesEngineRef,
 
     api_key_management: bool,
+
+    /// Semaphore used to controll the maximum number of concurrent writers
+    concurrent_writes_semaphore: Arc<tokio::sync::Semaphore>,
 }
 
 impl MosaicodFlight {
@@ -166,7 +169,7 @@ impl MosaicodFlight {
         let ts_gw = Arc::new(
             query::TimeseriesEngine::try_new(
                 store.clone(),
-                params::params().query_engine_memory_pool,
+                params::params().query_engine_memory_pool_size,
             )
             .map_err(|e| e.to_string())?,
         );
@@ -176,6 +179,9 @@ impl MosaicodFlight {
             db,
             ts_gw,
             api_key_management: false,
+            concurrent_writes_semaphore: Arc::new(tokio::sync::Semaphore::new(
+                params::params().max_concurrent_writes,
+            )),
         })
     }
 
@@ -296,7 +302,12 @@ impl FlightService for MosaicodFlight {
         let stream = request.into_inner();
         let mut decoder = FlightDataDecoder::new(stream.map_err(Into::into));
 
-        endpoint::do_put(self.context(), &mut decoder)
+        let ctx = endpoint::DoPutContext {
+            inner: self.context(),
+            concurrent_writes_semaphore: self.concurrent_writes_semaphore.clone(),
+        };
+
+        endpoint::do_put(ctx, &mut decoder)
             .await
             .inspect_err(log_server_error)?;
 
