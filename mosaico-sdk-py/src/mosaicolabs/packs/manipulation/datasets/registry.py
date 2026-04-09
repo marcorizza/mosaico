@@ -13,6 +13,15 @@ class DatasetRegistry:
     def register(self, plugin: DatasetPlugin) -> None:
         self._plugins.append(plugin)
 
+    def all(self) -> list[DatasetPlugin]:
+        return list(self._plugins)
+
+    def get(self, dataset_id: str) -> DatasetPlugin:
+        for plugin in self._plugins:
+            if plugin.dataset_id == dataset_id:
+                return plugin
+        raise KeyError(f"Unknown dataset plugin '{dataset_id}'")
+
     def resolve(self, root: Path) -> DatasetPlugin:
         for plugin in self._plugins:
             if plugin.supports(root):

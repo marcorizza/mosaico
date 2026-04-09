@@ -51,6 +51,12 @@ class UploadReporter:
             f"Duration:     [bold]{self._format_duration(report.duration_s)}[/bold]"
         )
 
+        if report.warnings:
+            summary_text += (
+                f"\nWarnings:     [bold]{len(report.warnings)}[/bold]"
+                f" ([dim]{self._truncate_error(report.warnings[-1])}[/dim])"
+            )
+
         if report.errors:
             summary_text += (
                 f"\nErrors:       [bold]{len(report.errors)}[/bold]"
@@ -192,6 +198,7 @@ class UploadReporter:
             "success": "[bold green]success[/bold green]",
             "partial_failure": "[bold yellow]partial_failure[/bold yellow]",
             "failed": "[bold red]failed[/bold red]",
+            "skipped": "[bold cyan]skipped[/bold cyan]",
             "interrupted": "[bold yellow]interrupted[/bold yellow]",
         }
         return status_map.get(status, f"[bold]{status}[/bold]")
@@ -206,6 +213,7 @@ class UploadReporter:
             "success": "green",
             "partial_failure": "yellow",
             "failed": "red",
+            "skipped": "cyan",
             "interrupted": "yellow",
         }
         return style_map.get(status, "blue")

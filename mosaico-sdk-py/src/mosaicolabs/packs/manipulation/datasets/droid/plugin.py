@@ -21,22 +21,50 @@ class DROIDPlugin:
     dataset_id = "droid"
 
     def supports(self, root: Path) -> bool:
-        return any(root.glob("**/*.parquet"))
+        return any(self._iter_dataset_parquet_files(root))
 
     def discover_sequences(self, root: Path) -> list[Path]:
         import pyarrow.parquet as pq
 
         sequences = []
-        for p in root.glob("**/*.parquet"):
+        for p in self._iter_dataset_parquet_files(root):
             try:
                 table = pq.read_table(p, columns=["episode_index"])
-                episodes = table.column("episode_index").unique().to_pylist()
+                episodes = sorted(
+                    int(episode)
+                    for episode in table.column("episode_index").unique().to_pylist()
+                    if episode is not None
+                )
                 for ep in episodes:
                     virtual_name = f"{p.stem}@@{ep:06d}{p.suffix}"
                     sequences.append(p.with_name(virtual_name))
             except Exception:
-                pass
+                continue
         return sorted(sequences)
+
+    def _iter_dataset_parquet_files(self, root: Path):
+        for parquet_path in root.glob("**/*.parquet"):
+            try:
+                relative_path = parquet_path.relative_to(root)
+            except ValueError:
+                relative_path = parquet_path
+
+            if parquet_path.name.startswith("._"):
+                continue
+
+            if "meta" in relative_path.parts:
+                continue
+
+            yield parquet_path
+
+    def _schema_names(self, parquet_path: Path) -> set[str]:
+        import pyarrow.dataset as ds
+
+        try:
+            dataset = ds.dataset(parquet_path, format="parquet")
+        except Exception:
+            return set()
+        return set(dataset.schema.names)
 
     def _extract_episode_metadata(
         self, real_path: Path, episode_index: int, base_metadata: dict
@@ -85,18 +113,12 @@ class DROIDPlugin:
     def _find_missing_paths(
         self, sequence_path: Path, required_paths: tuple[str, ...]
     ) -> tuple[str, ...]:
-        import pyarrow.dataset as ds
-
         real_path = sequence_path
         if "@@" in sequence_path.name:
             real_stem = sequence_path.stem.split("@@")[0]
             real_path = sequence_path.with_name(f"{real_stem}{sequence_path.suffix}")
 
-        try:
-            dataset = ds.dataset(real_path, format="parquet")
-            available_paths = set(dataset.schema.names)
-        except Exception:
-            available_paths = set()
+        available_paths = self._schema_names(real_path)
 
         return tuple(p for p in required_paths if p not in available_paths)
 

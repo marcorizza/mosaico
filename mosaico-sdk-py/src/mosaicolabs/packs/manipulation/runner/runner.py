@@ -11,7 +11,10 @@ from mosaicolabs.packs.manipulation.contracts import (
     DatasetPlugin,
     RosbagSequenceDescriptor,
 )
-from mosaicolabs.packs.manipulation.datasets import build_default_dataset_registry
+from mosaicolabs.packs.manipulation.datasets import (
+    DatasetRegistry,
+    build_default_dataset_registry,
+)
 from mosaicolabs.packs.manipulation.runner.executors.file_executor import (
     FileSequenceExecutor,
 )
@@ -36,9 +39,10 @@ class ManipulationRunner:
         tls_cert_path: str | None = None,
         log_level: str = "INFO",
         stop_requested: Callable[[], bool] | None = None,
+        dataset_registry: DatasetRegistry | None = None,
     ) -> None:
         self.console = console or Console(stderr=True)
-        self.dataset_registry = build_default_dataset_registry()
+        self.dataset_registry = dataset_registry or build_default_dataset_registry()
         self._stop_requested = stop_requested or (lambda: False)
         self._file_executor = FileSequenceExecutor(self.console)
         self._rosbag_executor = RosbagSequenceExecutor(
@@ -56,6 +60,7 @@ class ManipulationRunner:
         client: MosaicoClient,
         dataset_index: int | None = None,
         dataset_total: int | None = None,
+        selected_plugin_id: str | None = None,
     ) -> DatasetIngestionReport:
         dataset_start = time.monotonic()
         dataset_label = (
@@ -71,7 +76,7 @@ class ManipulationRunner:
             return self._handle_missing_root(root, dataset_label, dataset_start)
 
         plugin, plugin_id, sequence_paths = self._discover_sequences(
-            root, dataset_start
+            root, dataset_start, selected_plugin_id=selected_plugin_id
         )
         if isinstance(plugin, DatasetIngestionReport):
             return plugin
@@ -142,13 +147,26 @@ class ManipulationRunner:
         return report
 
     def _discover_sequences(
-        self, root: Path, start_time: float
+        self,
+        root: Path,
+        start_time: float,
+        selected_plugin_id: str | None = None,
     ) -> tuple | DatasetIngestionReport:
         try:
-            plugin = self.dataset_registry.resolve(root)
+            if selected_plugin_id is None:
+                plugin = self.dataset_registry.resolve(root)
+            else:
+                plugin = self.dataset_registry.get(selected_plugin_id)
             plugin_id = getattr(plugin, "dataset_id", type(plugin).__name__)
             sequence_paths = list(plugin.discover_sequences(root))
             return plugin, plugin_id, sequence_paths
+        except KeyError:
+            return DatasetIngestionReport.failed_report(
+                root=root,
+                plugin_id=selected_plugin_id or "unresolved",
+                error=f"Unknown dataset plugin '{selected_plugin_id}'.",
+                duration_s=time.monotonic() - start_time,
+            )
         except Exception:
             LOGGER.exception("Failed to resolve dataset root %s", root)
             return DatasetIngestionReport.failed_report(
@@ -167,7 +185,7 @@ class ManipulationRunner:
             LOGGER.exception(
                 "Failed to list existing sequences; continuing without skip detection."
             )
-            report.errors.append(
+            report.warnings.append(
                 "Failed to list existing sequences; skip detection was disabled."
             )
             return set()

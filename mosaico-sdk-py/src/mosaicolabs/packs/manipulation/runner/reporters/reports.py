@@ -7,7 +7,13 @@ from typing import Literal
 from mosaicolabs.packs.manipulation.contracts import IngestionDescriptor
 
 SequenceResultStatus = Literal["ingested", "skipped", "failed", "interrupted"]
-DatasetReportStatus = Literal["success", "partial_failure", "failed", "interrupted"]
+DatasetReportStatus = Literal[
+    "success",
+    "partial_failure",
+    "failed",
+    "skipped",
+    "interrupted",
+]
 RunReportStatus = Literal["success", "partial_failure", "interrupted"]
 
 
@@ -34,6 +40,7 @@ class DatasetIngestionReport:
     remote_size_bytes: int | None = None
     duration_s: float = 0.0
     errors: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
     ingested_plans: list[IngestionDescriptor] = field(default_factory=list)
 
     @classmethod
@@ -51,6 +58,23 @@ class DatasetIngestionReport:
             duration_s=duration_s,
         )
         report.errors.append(error)
+        return report
+
+    @classmethod
+    def skipped_report(
+        cls,
+        root: Path,
+        warning: str,
+        plugin_id: str = "none",
+        duration_s: float = 0.0,
+    ) -> "DatasetIngestionReport":
+        report = cls(
+            root=root,
+            plugin_id=plugin_id,
+            status="skipped",
+            duration_s=duration_s,
+        )
+        report.warnings.append(warning)
         return report
 
     @classmethod
@@ -88,6 +112,9 @@ class DatasetIngestionReport:
     def finalize(self, interrupted: bool = False) -> None:
         if interrupted or self.status == "interrupted":
             self.status = "interrupted"
+            return
+
+        if self.status == "skipped":
             return
 
         if self.status == "failed" and self.failed == 0:
