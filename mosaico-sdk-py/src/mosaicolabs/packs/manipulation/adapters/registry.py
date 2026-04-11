@@ -20,6 +20,41 @@ from mosaicolabs.packs.manipulation.adapters.droid.scalar.integer64 import (
 from mosaicolabs.packs.manipulation.adapters.droid.vision.video_frame import (
     DroidVideoFrameAdapter,
 )
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.action.terminate_episode import (
+    FractalRT1TerminateEpisodeAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.geometry.quaternion import (
+    FractalRT1QuaternionAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.geometry.spatial_bounds import (
+    FractalRT1OrientationBoxAdapter,
+    FractalRT1RobotOrientationPositionsBoxAdapter,
+    FractalRT1WorkspaceBoundsAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.geometry.vector2d import (
+    FractalRT1Vector2dAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.geometry.vector3d import (
+    FractalRT1Vector3dAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.language.text_embedding import (
+    FractalRT1TextEmbeddingAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.robot.pose import (
+    FractalRT1PoseAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.scalar.boolean import (
+    FractalRT1BooleanAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.scalar.floating32 import (
+    FractalRT1Floating32Adapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.scalar.string import (
+    FractalRT1StringAdapter,
+)
+from mosaicolabs.packs.manipulation.adapters.fractal_rt1.vision.video_frame import (
+    FractalRT1VideoFrameAdapter,
+)
 from mosaicolabs.packs.manipulation.adapters.reassemble.audio.audio import (
     ReassembleAudioAdapter,
 )
@@ -70,6 +105,19 @@ class AdapterRegistry:
 
 def build_default_adapter_registry() -> AdapterRegistry:
     registry = AdapterRegistry()
+    registry.register(FractalRT1TerminateEpisodeAdapter)
+    registry.register(FractalRT1BooleanAdapter)
+    registry.register(FractalRT1Floating32Adapter)
+    registry.register(FractalRT1StringAdapter)
+    registry.register(FractalRT1Vector2dAdapter)
+    registry.register(FractalRT1Vector3dAdapter)
+    registry.register(FractalRT1PoseAdapter)
+    registry.register(FractalRT1QuaternionAdapter)
+    registry.register(FractalRT1OrientationBoxAdapter)
+    registry.register(FractalRT1RobotOrientationPositionsBoxAdapter)
+    registry.register(FractalRT1WorkspaceBoundsAdapter)
+    registry.register(FractalRT1TextEmbeddingAdapter)
+    registry.register(FractalRT1VideoFrameAdapter)
     registry.register(ReassembleJointStateAdapter)
     registry.register(ReassemblePoseAdapter)
     registry.register(ReassembleVelocityAdapter)

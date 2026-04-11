@@ -10,6 +10,7 @@ from mosaicolabs.handlers.sequence_handler import SequenceHandler
 from mosaicolabs.packs.manipulation.contracts import (
     DatasetPlugin,
     RosbagSequenceDescriptor,
+    SequenceDescriptor,
     WriteMode,
 )
 from mosaicolabs.packs.manipulation.datasets import (
@@ -266,8 +267,6 @@ class ManipulationRunner:
         client: MosaicoClient,
         existing_sequences: set[str] | None = None,
     ) -> SequenceIngestionResult:
-        local_size = self._get_local_sequence_size(sequence_path)
-
         try:
             plan = plugin.create_ingestion_plan(sequence_path)
         except KeyboardInterrupt:
@@ -279,10 +278,11 @@ class ManipulationRunner:
             )
             return self._build_sequence_error_result(
                 sequence_name=sequence_path.name,
-                local_size=local_size,
+                local_size=self._get_local_sequence_size(sequence_path),
                 error=f"Failed to create ingestion plan for '{sequence_path.name}': {exc}",
             )
 
+        local_size = self._get_local_sequence_size(sequence_path, plan)
         backend = getattr(plan, "backend", "file")
 
         if self._stop_requested():
@@ -357,7 +357,16 @@ class ManipulationRunner:
             error="Interrupted by user.",
         )
 
-    def _get_local_sequence_size(self, sequence_path: Path) -> int:
+    def _get_local_sequence_size(
+        self,
+        sequence_path: Path,
+        plan: SequenceDescriptor | RosbagSequenceDescriptor | None = None,
+    ) -> int:
+        if plan is not None:
+            estimated_size = plan.sequence_metadata.get("estimated_local_size_bytes")
+            if estimated_size is not None:
+                return int(estimated_size)
+
         real_path = sequence_path
         episode_count = 1
 

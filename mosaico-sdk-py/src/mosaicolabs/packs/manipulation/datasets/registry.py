@@ -2,6 +2,7 @@ from pathlib import Path
 
 from mosaicolabs.packs.manipulation.contracts import DatasetPlugin
 from mosaicolabs.packs.manipulation.datasets.droid import DROIDPlugin
+from mosaicolabs.packs.manipulation.datasets.fractal_rt1 import FractalRT1Plugin
 from mosaicolabs.packs.manipulation.datasets.mml import MMLPlugin
 from mosaicolabs.packs.manipulation.datasets.reassemble import ReassemblePlugin
 
@@ -31,6 +32,7 @@ class DatasetRegistry:
 
 def build_default_dataset_registry() -> DatasetRegistry:
     registry = DatasetRegistry()
+    registry.register(FractalRT1Plugin())
     registry.register(ReassemblePlugin())
     registry.register(MMLPlugin())
     registry.register(DROIDPlugin())
