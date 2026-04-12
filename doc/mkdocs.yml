@@ -79,9 +79,14 @@ nav:
               - SDK/handling/writing.md
               - SDK/handling/reading.md
           - SDK/query.md
-          - Bridges:
-              - SDK/bridges/ml.md
-              - SDK/bridges/ros.md
+      - Bridges:
+          - SDK/bridges/ml.md
+          - SDK/bridges/ros.md
+      - Packs:
+          - SDK/packs/index.md
+          - Manipulation:
+              - SDK/packs/manipulation/index.md
+              - Integrating a Dataset: SDK/packs/manipulation/integrating.md
       - Python API Reference:
           - SDK/API_reference/comm.md
           - SDK/API_reference/enum.md
