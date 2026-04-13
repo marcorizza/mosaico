@@ -47,6 +47,8 @@ This became the daily routine. The focus shifted from actual machine learning, t
 
 In the early days of personal computers, sharing a document was a chaotic mess of proprietary formats. You know the story. Then the PDF was invented. It didn't matter what tool created the document; once it was compiled to a PDF, any machine could read it flawlessly.
 
-Mosaico does exactly this for robotics. And it does it going fast.
+Mosaico does exactly this for robotics and IoT, serving as the universal data protocol for Physical AI.
 
-Mosaico provides a standardized, extremely high-performance underlying data representation that unifies all modalities: video, audio, text, semantics, robot states, and events. Once your robotic telemetry is ingested into Mosaico, it becomes universally queryable. Instantly streamable. Completely agnostic to the custom sensors that originally generated it. This is not just a nice abstraction: it is a fundamental paradigm shift.
+Traditional architectures struggle with the massive volume and variety of modern sensor suites, often limiting themselves to simple visualization. Mosaico instead provides a standardized, extremely high-performance underlying data representation that unifies all modalities into a foundation for petabyte-scale integration and orchestration.
+
+Beyond simple observability, it enables true data-driven debugging, certifiable pipelines backed by native data lineage, and advanced multimodal search. Once your robotic telemetry is ingested into Mosaico, it becomes universally queryable. Instantly streamable. Completely agnostic to the custom sensors that originally generated it. This is not just a nice abstraction: it is a fundamental paradigm shift.
