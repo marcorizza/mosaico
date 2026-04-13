@@ -29,9 +29,7 @@ def _dataset_feature_paths(root_str: str) -> frozenset[str]:
 @functools.lru_cache(maxsize=8)
 def average_episode_size_bytes(root_str: str) -> int:
     root = Path(root_str)
-    total_size_bytes = sum(
-        p.stat().st_size for p in root.glob("*.tfrecord-*")
-    )
+    total_size_bytes = sum(p.stat().st_size for p in root.glob("*.tfrecord-*"))
     return total_size_bytes // max(1, len(available_episodes(root)))
 
 

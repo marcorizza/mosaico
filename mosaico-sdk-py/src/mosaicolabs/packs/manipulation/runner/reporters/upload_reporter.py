@@ -10,6 +10,12 @@ from mosaicolabs.packs.manipulation.runner.reporters.reports import (
 )
 
 
+def _describe_write_mode(write_mode: str) -> str:
+    if write_mode == "sync":
+        return "sync (default)"
+    return "async (shared-client topic threads)"
+
+
 class UploadReporter:
     def __init__(self, console: Console) -> None:
         self.console = console
@@ -24,7 +30,7 @@ class UploadReporter:
         body = (
             f"Datasets:     [bold]{len(dataset_roots)}[/bold]\n"
             f"Destination:  [bold]{host}:{port}[/bold]\n"
-            f"Write Mode:   [bold]{write_mode}[/bold]"
+            f"Write Mode:   [bold]{_describe_write_mode(write_mode)}[/bold]"
         )
         self.console.print(
             Panel(

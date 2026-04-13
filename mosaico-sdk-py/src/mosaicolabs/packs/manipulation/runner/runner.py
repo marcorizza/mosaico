@@ -40,7 +40,7 @@ class ManipulationRunner:
         port: int = 6276,
         tls_cert_path: str | None = None,
         log_level: str = "INFO",
-        write_mode: WriteMode = "async",
+        write_mode: WriteMode = "sync",
         stop_requested: Callable[[], bool] | None = None,
         dataset_registry: DatasetRegistry | None = None,
     ) -> None:

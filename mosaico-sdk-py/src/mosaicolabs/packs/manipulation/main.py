@@ -113,10 +113,13 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--write-mode",
-        default="async",
+        default="sync",
         choices=WRITE_MODES,
         metavar="MODE",
-        help="Topic ingestion mode: 'sync' disables topic threads, 'async' keeps parallel topic ingestion.",
+        help=(
+            "Topic ingestion mode for file-backed datasets: 'sync' is the "
+            "default; 'async' keeps per-topic threads over a shared SDK client."
+        ),
     )
     return parser.parse_args(argv)
 

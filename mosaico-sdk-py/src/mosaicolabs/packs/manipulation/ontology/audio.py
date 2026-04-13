@@ -1,9 +1,7 @@
 from enum import Enum
 from typing import Optional
 
-import pyarrow as pa
-
-from mosaicolabs import Serializable
+from mosaicolabs import MosaicoField, MosaicoType, Serializable
 
 
 class AudioFormat(str, Enum):
@@ -19,76 +17,43 @@ class AudioFormat(str, Enum):
 class AudioInfo(Serializable):
     __ontology_tag__ = "audio_info"
 
-    __msco_pyarrow_struct__ = pa.struct(
-        [
-            pa.field(
-                "channels",
-                pa.uint8(),
-                nullable=False,
-            ),
-            pa.field(
-                "sample_rate",
-                pa.uint32(),
-                nullable=False,
-            ),
-            pa.field(
-                "sample_format",
-                pa.string(),
-                nullable=False,
-            ),
-            pa.field(
-                "bitrate",
-                pa.uint32(),
-                nullable=True,
-            ),
-            pa.field(
-                "coding_format",
-                pa.string(),
-                nullable=False,
-            ),
-        ],
+    channels: MosaicoType.uint8 = MosaicoField(
+        nullable=True,
+        description="Number of audio channels in the stream.",
     )
-
-    channels: int
-    sample_rate: int
-    sample_format: str
-    bitrate: Optional[int] = None
-    coding_format: AudioFormat
+    sample_rate: MosaicoType.uint32 = MosaicoField(
+        nullable=True,
+        description="Sampling rate of the audio stream in hertz.",
+    )
+    sample_format: MosaicoType.string = MosaicoField(
+        nullable=True,
+        description="Sample representation format, for example s16le or float32.",
+    )
+    bitrate: Optional[MosaicoType.uint32] = MosaicoField(
+        default=None,
+        description="Encoded bitrate of the audio stream in bits per second when available.",
+    )
+    coding_format: MosaicoType.string = MosaicoField(
+        nullable=True,
+        description="Declared coding format of the audio stream.",
+    )
 
 
 class AudioData(Serializable):
     __ontology_tag__ = "audio_data"
 
-    __msco_pyarrow_struct__ = pa.struct(
-        [
-            pa.field(
-                "data",
-                pa.binary(),
-                nullable=False,
-            ),
-        ],
+    data: MosaicoType.binary = MosaicoField(
+        description="Binary payload containing the audio data."
     )
-
-    data: bytes
 
 
 class AudioDataStamped(Serializable):
     __ontology_tag__ = "audio_data_stamped"
 
-    __msco_pyarrow_struct__ = pa.struct(
-        [
-            pa.field(
-                "audio_data",
-                AudioData.__msco_pyarrow_struct__,
-                nullable=False,
-            ),
-            pa.field(
-                "audio_info",
-                AudioInfo.__msco_pyarrow_struct__,
-                nullable=True,
-            ),
-        ],
+    audio_data: AudioData = MosaicoField(
+        description="Audio payload for the current message."
     )
-
-    audio_data: AudioData
-    audio_info: Optional[AudioInfo] = None
+    audio_info: Optional[AudioInfo] = MosaicoField(
+        default=None,
+        description="Optional metadata describing the audio payload.",
+    )

@@ -1,99 +1,40 @@
-from typing import List
-
 import numpy as np
-import pyarrow as pa
 from PIL import Image as PILImage
 
-from mosaicolabs import Serializable
+from mosaicolabs import MosaicoField, MosaicoType, Serializable
 
 
 class Event(Serializable):
     __ontology_tag__ = "event"
 
-    __msco_pyarrow_struct__ = pa.struct(
-        [
-            pa.field(
-                "x",
-                pa.uint16(),
-                nullable=False,
-                metadata={"description": "Horizontal pixel coordinate of the event."},
-            ),
-            pa.field(
-                "y",
-                pa.uint16(),
-                nullable=False,
-                metadata={"description": "Vertical pixel coordinate of the event."},
-            ),
-            pa.field(
-                "polarity",
-                pa.uint8(),
-                nullable=False,
-                metadata={"description": "Polarity of the brightness change."},
-            ),
-            pa.field(
-                "dt_ns",
-                pa.int64(),
-                nullable=False,
-                metadata={
-                    "description": "Time offset, in nanoseconds, from the start of the enclosing event window."
-                },
-            ),
-        ],
+    x: MosaicoType.uint16 = MosaicoField(
+        description="Horizontal pixel coordinate of the event."
     )
-
-    x: int
-    y: int
-    polarity: int
-    dt_ns: int
+    y: MosaicoType.uint16 = MosaicoField(
+        description="Vertical pixel coordinate of the event."
+    )
+    polarity: MosaicoType.uint8 = MosaicoField(
+        description="Polarity of the brightness change."
+    )
+    dt_ns: MosaicoType.int64 = MosaicoField(
+        description="Time offset, in nanoseconds, from the start of the enclosing event window."
+    )
 
 
 class EventCamera(Serializable):
     __ontology_tag__ = "event_camera"
 
-    __msco_pyarrow_struct__ = pa.struct(
-        [
-            pa.field(
-                "width",
-                pa.uint32(),
-                nullable=False,
-                metadata={"description": "Sensor width in pixels."},
-            ),
-            pa.field(
-                "height",
-                pa.uint32(),
-                nullable=False,
-                metadata={"description": "Sensor height in pixels."},
-            ),
-            pa.field(
-                "events",
-                pa.list_(Event.__msco_pyarrow_struct__),
-                nullable=False,
-                metadata={"description": "Raw events collected in the event window."},
-            ),
-            pa.field(
-                "t_start_ns",
-                pa.int64(),
-                nullable=False,
-                metadata={
-                    "description": "Inclusive start timestamp of the event window."
-                },
-            ),
-            pa.field(
-                "t_end_ns",
-                pa.int64(),
-                nullable=False,
-                metadata={
-                    "description": "Exclusive end timestamp of the event window."
-                },
-            ),
-        ],
+    width: MosaicoType.uint32 = MosaicoField(description="Sensor width in pixels.")
+    height: MosaicoType.uint32 = MosaicoField(description="Sensor height in pixels.")
+    events: MosaicoType.list_(Event) = MosaicoField(
+        description="Raw events collected in the event window."
     )
-
-    width: int
-    height: int
-    events: List[Event]
-    t_start_ns: int
-    t_end_ns: int
+    t_start_ns: MosaicoType.int64 = MosaicoField(
+        description="Inclusive start timestamp of the event window."
+    )
+    t_end_ns: MosaicoType.int64 = MosaicoField(
+        description="Exclusive end timestamp of the event window."
+    )
 
     def to_pillow(self) -> PILImage.Image:
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)

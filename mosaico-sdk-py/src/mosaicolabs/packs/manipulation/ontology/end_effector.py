@@ -1,33 +1,15 @@
-from typing import List
-
-import pyarrow as pa
-
-from mosaicolabs import Serializable
+from mosaicolabs import MosaicoField, MosaicoType, Serializable
 
 
 class EndEffector(Serializable):
     __ontology_tag__ = "end_effector"
 
-    __msco_pyarrow_struct__ = pa.struct(
-        [
-            pa.field(
-                "efforts",
-                pa.list_(pa.float64()),
-                nullable=False,
-            ),
-            pa.field(
-                "positions",
-                pa.list_(pa.float64()),
-                nullable=False,
-            ),
-            pa.field(
-                "velocities",
-                pa.list_(pa.float64()),
-                nullable=False,
-            ),
-        ]
+    efforts: MosaicoType.list_(MosaicoType.float64) = MosaicoField(
+        description="End-effector effort values for each controlled dimension."
     )
-
-    efforts: List[float]
-    positions: List[float]
-    velocities: List[float]
+    positions: MosaicoType.list_(MosaicoType.float64) = MosaicoField(
+        description="End-effector position values for each controlled dimension."
+    )
+    velocities: MosaicoType.list_(MosaicoType.float64) = MosaicoField(
+        description="End-effector velocity values for each controlled dimension."
+    )

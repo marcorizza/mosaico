@@ -12,7 +12,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class FileSequenceExecutor:
-    def __init__(self, console, write_mode: WriteMode = "async") -> None:
+    def __init__(self, console, write_mode: WriteMode = "sync") -> None:
         self.console = console
         self._write_mode = write_mode
         self._ingester = TopicIngester(write_mode=write_mode)
@@ -35,7 +35,11 @@ class FileSequenceExecutor:
             plan.sequence_name,
             sequence_path.name,
             len(plan.topics),
-            self._write_mode,
+            (
+                "sync (default)"
+                if self._write_mode == "sync"
+                else "async (shared-client topic threads)"
+            ),
         )
 
         missing_topic_sources = self._find_missing_topic_sources(sequence_path, plan)

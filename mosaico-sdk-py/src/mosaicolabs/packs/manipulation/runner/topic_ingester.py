@@ -18,7 +18,7 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TopicIngester:
-    def __init__(self, write_mode: WriteMode = "async") -> None:
+    def __init__(self, write_mode: WriteMode = "sync") -> None:
         self.adapter_registry = build_default_adapter_registry()
         self._write_mode = write_mode
 
