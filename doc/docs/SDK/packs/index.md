@@ -7,7 +7,7 @@ description: Why Mosaico is the PDF for Robotics and the ultimate solution to th
 
 Mosaico Packs are ready-to-use data ingestion pipelines designed specifically for Physical AI and Robotics. 
 
-Because each Pack maps internal topics from multiple different datasets into a single unified ontology, you can use the Mosaico SDK to instantly run powerful cross-dataset queries on deeply heterogeneous formats without writing custom parsers.
+Each Pack maps internal data streams from multiple different datasets into a single unified ontology. This allows you to instantly run powerful cross-dataset queries on deeply heterogeneous formats using the Mosaico SDK, completely eliminating the need to write custom parsers.
 
 ## Available Packs
 
