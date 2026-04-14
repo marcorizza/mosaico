@@ -173,4 +173,4 @@ We provide built-in support for multiple open-source formats. We recommend explo
 ### Ready to start?
 
 If your robotic data is saved in a proprietary format and isn't supported out-of-the-box, the pack is fully extensible. 
-We recommend jumping directly to the **[Integrating a Custom Dataset](./integrating.md)** guide to build your own Plugin and Adapter.
+We recommend jumping directly to the **[Integrating a Dataset](./integrating.md)** guide to build your own plugin, custom ontologies and adapters.
