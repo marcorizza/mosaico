@@ -12,6 +12,16 @@ The result is a single, ready-to-use ingestion suite where a `RobotJoint` topic 
     * **[Documentation: The Writing Workflow](../../handling/writing.md)**
     * **[Documentation: The ROS Bridge](../../bridges/ros.md)**
 
+### Installation
+
+Install the manipulation pack via pip:
+
+```bash
+pip install mosaicolabs-packs
+```
+
+*Note: Requires Python 3.10 or higher.*
+
 ### Basic Usage
 
 !!! info "Infrastructure Prerequisite"

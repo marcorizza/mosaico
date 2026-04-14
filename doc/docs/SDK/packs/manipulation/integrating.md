@@ -5,9 +5,6 @@ description: A discursive guide to adding a new dataset plugin to the Manipulati
 
 This guide explains how to extend the Manipulation Pack to support your own custom dataset formats alongside the built-in ones. 
 
-!!! abstract "Development Requirements"
-    Integration work requires working directly with the SDK source tree. Since the pre-compiled package does not expose the internal development layers, you will need to clone the `mosaico-labs/mosaico` source and develop locally to add or modify dataset plugins, iterators, and adapters.
-
 ??? question "In Depth Explanation"
     * **[Documentation: Data Models & Ontology](../../ontology.md)**
     * **[Example: Customizing the Data Ontology](../../examples/ontology_customization.md)**
