@@ -17,7 +17,7 @@ keywords = [
 packages = [{ include = "mosaicopacks", from = "src" }]
 
 [tool.poetry.dependencies]
-python = ">=3.10,<4"
+python = ">=3.11,<4"
 mosaicolabs = { path = "../mosaico-sdk-py", develop = true }
 numpy = ">=2.0.0,<2.5.0"
 pillow = ">=11.3.0,<13.0.0"
@@ -28,6 +28,7 @@ h5py = ">=3.10.0"
 tensorflow = ">=2.15.0"
 tensorflow-datasets = ">=4.9.0"
 protobuf = ">=3.20.0,<4.0.0"
+scipy = "^1.17.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = ">=8.4.2"
