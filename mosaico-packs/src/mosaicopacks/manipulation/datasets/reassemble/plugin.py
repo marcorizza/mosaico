@@ -1,3 +1,11 @@
+"""
+Reassemble dataset plugin.
+
+This module maps Reassemble HDF5 recordings to the generic ingestion descriptors
+consumed by the manipulation runner. The plugin keeps dataset-specific path and
+sensor knowledge in one place so the rest of the pipeline stays backend-agnostic.
+"""
+
 from pathlib import Path
 
 from mosaicolabs import CompressedImage, ForceTorque, Pose, RobotJoint, Velocity
@@ -19,12 +27,27 @@ from mosaicopacks.manipulation.ontology.event_camera import EventCamera
 
 
 class ReassemblePlugin:
+    """
+    Dataset plugin for Reassemble HDF5 recordings.
+
+    Reassemble sequences are represented as standalone `.h5` files with a known set
+    of datasets for camera, event, audio, and robot-state streams. This plugin
+    translates that fixed layout into the descriptor model used by the generic runner.
+    """
+
     dataset_id = "reassemble"
 
     def supports(self, root: Path) -> bool:
+        """
+        Returns whether the root looks like a Reassemble dataset directory.
+
+        Reassemble data is currently recognized purely by the presence of HDF5
+        sequence files at the root level.
+        """
         return any(root.glob("*.h5"))
 
     def discover_sequences(self, root: Path) -> list[Path]:
+        """Returns the Reassemble sequence files that should be ingested."""
         return sorted(root.glob("*.h5"))
 
     def _find_missing_paths(
@@ -36,6 +59,20 @@ class ReassemblePlugin:
             return reader.missing_paths(required_paths)
 
     def create_ingestion_plan(self, sequence_path: Path) -> SequenceDescriptor:
+        """
+        Builds the declarative ingestion plan for one Reassemble sequence file.
+
+        The returned descriptor captures both the shared sequence metadata and the
+        topic-by-topic mapping from HDF5 paths to ontology messages. Keeping this
+        plan fully declarative lets the generic file executor validate inputs and
+        ingest the sequence without dataset-specific branching.
+
+        Args:
+            sequence_path: Reassemble `.h5` file discovered under the dataset root.
+
+        Returns:
+            The sequence descriptor consumed by the file-backed ingestion runner.
+        """
         return SequenceDescriptor(
             sequence_name=f"{self.dataset_id}_{sequence_path.stem}",
             sequence_metadata={

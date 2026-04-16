@@ -1,3 +1,11 @@
+"""
+Topic-level ingestion helpers for file-backed sequences.
+
+This module owns the last mile of file-based ingestion: creating topic writers,
+binding adapters, and pushing translated payloads either sequentially or in parallel.
+It isolates topic execution policy from the higher-level dataset runner.
+"""
+
 import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -19,7 +27,16 @@ LOGGER = logging.getLogger(__name__)
 
 
 class TopicIngester:
+    """
+    Writes the topics declared in a `SequenceDescriptor`.
+
+    The ingester is deliberately narrower than the dataset runner: it assumes a file-
+    backed plan already exists and focuses only on adapter resolution, topic writer
+    preparation, and per-topic payload streaming.
+    """
+
     def __init__(self, write_mode: WriteMode = "sync") -> None:
+        """Initializes the ingester with the built-in adapter registry and write mode."""
         self.adapter_registry = build_default_adapter_registry()
         self._write_mode = write_mode
 
@@ -29,6 +46,21 @@ class TopicIngester:
         plan: SequenceDescriptor,
         ui: SequenceProgress,
     ) -> list:
+        """
+        Resolves adapters and ensures each topic in the plan has a writer.
+
+        Args:
+            swriter: Open sequence writer returned by the SDK.
+            plan: File-backed sequence descriptor to ingest.
+            ui: Progress reporter used to reflect topic state.
+
+        Returns:
+            Tuples of topic descriptor, topic writer, and resolved adapter class.
+
+        Raises:
+            RuntimeError: If a topic cannot be created in the target sequence.
+            KeyError: If a topic references an unknown adapter id.
+        """
         topic_writers = []
         for topic in plan.topics:
             writer = swriter.get_topic_writer(topic_name=topic.topic_name)
@@ -69,6 +101,18 @@ class TopicIngester:
         ui: SequenceProgress,
         missing_topic_sources: dict[str, tuple[str, ...]] | None = None,
     ) -> int:
+        """
+        Runs topic ingestion using the configured write mode.
+
+        Args:
+            sequence_path: Source sequence path used by the topic payload iterators.
+            topic_writers: Prepared topic writer tuples returned by `prepare_topic_writers`.
+            ui: Progress reporter used for live status updates.
+            missing_topic_sources: Optional precomputed missing source paths per topic.
+
+        Returns:
+            The total number of messages pushed across all topics.
+        """
         if self._write_mode == "sync":
             return self.run_sequential_ingestion(
                 sequence_path,
@@ -91,6 +135,12 @@ class TopicIngester:
         ui: SequenceProgress,
         missing_topic_sources: dict[str, tuple[str, ...]] | None = None,
     ) -> int:
+        """
+        Ingests topics concurrently using one worker per topic.
+
+        This mode trades simpler execution for throughput when topic iterators and
+        writers can make progress independently over a shared SDK client.
+        """
         missing_topic_sources = missing_topic_sources or {}
         stop_event = Event()
         total_messages = 0
@@ -136,6 +186,7 @@ class TopicIngester:
         ui: SequenceProgress,
         missing_topic_sources: dict[str, tuple[str, ...]] | None = None,
     ) -> int:
+        """Ingests topics one after another in the current thread."""
         missing_topic_sources = missing_topic_sources or {}
         stop_event = Event()
         total_messages = 0
@@ -173,6 +224,12 @@ class TopicIngester:
         stop_event: Event,
         missing_paths: tuple[str, ...] = (),
     ) -> int:
+        """
+        Pushes all payloads for one topic through the resolved adapter and writer.
+
+        Missing source paths are treated as an empty topic rather than as a hard
+        failure, which lets sequence creation proceed even when some sources are absent.
+        """
         if missing_paths:
             ui.update_status(topic.topic_name, "Missing Source", "yellow")
             ui.complete_topic(topic.topic_name)

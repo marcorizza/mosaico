@@ -1,9 +1,32 @@
+"""
+Event Camera Data Structures.
+
+This module defines ontology models for asynchronous event-camera data.
+The structures preserve sparse event streams in their native form instead of
+rasterizing them during ingestion, because frame conversion would discard timing
+detail and impose one aggregation strategy too early.
+"""
+
 import numpy as np
 from mosaicolabs import MosaicoField, MosaicoType, Serializable
 from PIL import Image as PILImage
 
 
 class Event(Serializable):
+    """Represent one event emitted by an event camera sensor.
+
+    Each event keeps just the information needed to reconstruct the original sparse
+    signal. `dt_ns` is stored relative to the enclosing `EventCamera` window because
+    many datasets naturally export event packets that way, and preserving that layout
+    keeps ingestion close to the source format.
+
+    Attributes:
+        x: Horizontal pixel coordinate.
+        y: Vertical pixel coordinate.
+        polarity: Brightness-change polarity encoded as a binary value.
+        dt_ns: Time offset from the start of the enclosing event window.
+    """
+
     __ontology_tag__ = "event"
 
     x: MosaicoType.uint16 = MosaicoField(
@@ -21,6 +44,21 @@ class Event(Serializable):
 
 
 class EventCamera(Serializable):
+    """Represent one time window of events from an event camera.
+
+    The model exists as the pack's canonical container for event batches. It keeps
+    the original sparse representation intact so downstream users can choose their own
+    accumulation, denoising, or visualization strategy instead of inheriting one
+    ingestion-time conversion.
+
+    Attributes:
+        width: Sensor width in pixels.
+        height: Sensor height in pixels.
+        events: Raw events collected in the window.
+        t_start_ns: Inclusive start timestamp of the event window.
+        t_end_ns: Exclusive end timestamp of the event window.
+    """
+
     __ontology_tag__ = "event_camera"
 
     width: MosaicoType.uint32 = MosaicoField(description="Sensor width in pixels.")
@@ -36,6 +74,17 @@ class EventCamera(Serializable):
     )
 
     def to_pillow(self) -> PILImage.Image:
+        """Render the event window as a diagnostic RGB image.
+
+        Positive events are drawn in green and negative events in red. The helper is
+        intentionally separate from the ingestion path: it exists to make raw event
+        data inspectable by humans without redefining the ontology itself as an image
+        format.
+
+        Raises:
+            ValueError: If any event coordinate falls outside the declared image
+                bounds or if polarity values are not binary.
+        """
         frame = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         if not self.events:

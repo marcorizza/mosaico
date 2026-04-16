@@ -1,3 +1,12 @@
+"""
+Iterator factories for DROID parquet and video-backed episodes.
+
+These helpers adapt DROID's storage model to the callable interface expected by
+`TopicDescriptor`. Tabular payloads are read from parquet data, while image payloads
+are aligned from companion MP4 files using frame indices and timestamps stored in the
+episode records.
+"""
+
 import functools
 from pathlib import Path
 from typing import Callable, Iterable
@@ -5,6 +14,7 @@ from typing import Callable, Iterable
 
 @functools.lru_cache(maxsize=16)
 def _get_parquet_df(real_path: str):
+    """Caches the full pandas dataframe loaded from one DROID parquet file."""
     import pyarrow.dataset as ds
 
     return ds.dataset(real_path, format="parquet").scanner().to_table().to_pandas()
@@ -15,6 +25,21 @@ def iter_parquet_records(
     real_path: Path,
     episode_index: int,
 ) -> Callable[[Path], Iterable[dict]]:
+    """
+    Builds a payload iterator factory for parquet-backed DROID fields.
+
+    The returned callable ignores the sequence path argument because the concrete
+    parquet file and episode index are already bound when the descriptor is created.
+
+    Args:
+        fields: Mapping from payload field names to parquet column names.
+        real_path: Real parquet file containing the episode data.
+        episode_index: Episode to extract from the parquet file.
+
+    Returns:
+        A callable that yields one payload per parquet row in the episode.
+    """
+
     def _fn(_ignored_path: Path) -> Iterable[dict]:
         df_all = _get_parquet_df(str(real_path))
         df = df_all[df_all["episode_index"] == episode_index]
@@ -37,6 +62,17 @@ def count_parquet_records(
     real_path: Path,
     episode_index: int,
 ) -> Callable[[Path], int]:
+    """
+    Builds a counter factory matching the payloads produced by `iter_parquet_records`.
+
+    Args:
+        real_path: Real parquet file containing the episode data.
+        episode_index: Episode to count inside the parquet file.
+
+    Returns:
+        A callable that returns the number of parquet rows in the episode.
+    """
+
     def _fn(_ignored_path: Path) -> int:
         df_all = _get_parquet_df(str(real_path))
         return int((df_all["episode_index"] == episode_index).sum())
@@ -47,6 +83,22 @@ def count_parquet_records(
 def iter_mp4_frames(
     real_path: Path, episode_index: int, camera_key: str
 ) -> Callable[[Path], Iterable[dict]]:
+    """
+    Builds a payload iterator factory for camera frames stored in companion MP4 files.
+
+    DROID image topics are not stored inside the parquet file. Instead, this helper
+    resolves the matching MP4 asset, seeks to the first frame of the target episode,
+    and emits JPEG-encoded frames aligned to the episode timestamps recorded in parquet.
+
+    Args:
+        real_path: Real parquet file describing the episode.
+        episode_index: Episode to extract from the parquet file.
+        camera_key: Logical camera identifier used to locate the matching MP4 path.
+
+    Returns:
+        A callable that yields JPEG image payloads aligned with episode timestamps.
+    """
+
     def _fn(_ignored_path: Path) -> Iterable[dict]:
         import io
 

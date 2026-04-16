@@ -1,3 +1,12 @@
+"""
+High-level orchestration for manipulation dataset ingestion.
+
+This module coordinates dataset discovery, plan creation, executor selection, and
+report aggregation. It is the layer that turns plugin-specific descriptors into one
+consistent ingestion workflow, regardless of whether the underlying backend is file-
+based or rosbag-based.
+"""
+
 import logging
 import time
 from collections.abc import Callable
@@ -33,6 +42,14 @@ LOGGER = logging.getLogger(__name__)
 
 
 class ManipulationRunner:
+    """
+    Orchestrates ingestion for one or more manipulation dataset roots.
+
+    The runner owns the boundary between plugin discovery and execution. Plugins only
+    describe sequences; executors only know how to ingest a prepared plan. This class
+    connects the two and turns their outcomes into structured reports.
+    """
+
     def __init__(
         self,
         console: Console | None = None,
@@ -44,6 +61,7 @@ class ManipulationRunner:
         stop_requested: Callable[[], bool] | None = None,
         dataset_registry: DatasetRegistry | None = None,
     ) -> None:
+        """Initializes the runner with shared executors and plugin registry state."""
         self.console = console or Console(stderr=True)
         self.dataset_registry = dataset_registry or build_default_dataset_registry()
         self._stop_requested = stop_requested or (lambda: False)
@@ -68,6 +86,23 @@ class ManipulationRunner:
         dataset_total: int | None = None,
         selected_plugin_id: str | None = None,
     ) -> DatasetIngestionReport:
+        """
+        Ingests one dataset root and returns the aggregated dataset-level report.
+
+        The method resolves the dataset plugin, discovers sequences, delegates each
+        sequence to the appropriate executor, and then enriches the final report with
+        timing and remote-size information.
+
+        Args:
+            root: Dataset root requested by the caller.
+            client: Connected Mosaico client used for discovery and ingestion.
+            dataset_index: Optional one-based dataset position for logging.
+            dataset_total: Optional total number of dataset roots in the run.
+            selected_plugin_id: Optional plugin id chosen explicitly by the caller.
+
+        Returns:
+            The report summarizing ingestion for the dataset root.
+        """
         dataset_start = time.monotonic()
         dataset_label = (
             f"[{dataset_index}/{dataset_total}] "
@@ -138,6 +173,7 @@ class ManipulationRunner:
     def _build_interrupted_report(
         self, root: Path, start_time: float
     ) -> DatasetIngestionReport:
+        """Builds the dataset report used when ingestion is interrupted early."""
         report = DatasetIngestionReport.interrupted_report(root=root)
         report.duration_s = time.monotonic() - start_time
         return report
@@ -145,6 +181,7 @@ class ManipulationRunner:
     def _handle_missing_root(
         self, root: Path, label: str, start_time: float
     ) -> DatasetIngestionReport:
+        """Builds the failure report used when the requested dataset root is missing."""
         report = DatasetIngestionReport.failed_report(
             root=root,
             error=f"Dataset root does not exist: {root}",
@@ -159,6 +196,12 @@ class ManipulationRunner:
         start_time: float,
         selected_plugin_id: str | None = None,
     ) -> tuple | DatasetIngestionReport:
+        """
+        Resolves the dataset plugin and discovers the sequence paths under one root.
+
+        Returns either the successful discovery tuple or an already-populated failure
+        report so callers can keep the control flow simple.
+        """
         try:
             if selected_plugin_id is None:
                 plugin = self.dataset_registry.resolve(root)
@@ -186,6 +229,12 @@ class ManipulationRunner:
     def _get_existing_sequences(
         self, client: MosaicoClient, report: DatasetIngestionReport
     ) -> set[str]:
+        """
+        Retrieves the remote sequence names used for skip detection.
+
+        Failures are downgraded to warnings so ingestion can continue even when the
+        optimization is unavailable.
+        """
         try:
             return set(client.list_sequences())
         except Exception:
@@ -200,6 +249,7 @@ class ManipulationRunner:
     def _finalize_empty_report(
         self, report: DatasetIngestionReport, label: str, start_time: float
     ) -> DatasetIngestionReport:
+        """Finalizes the report for a dataset root that yielded no sequences."""
         LOGGER.warning("No sequences discovered under %s", report.root)
         report.duration_s = time.monotonic() - start_time
         report.remote_size_bytes = 0
@@ -219,6 +269,7 @@ class ManipulationRunner:
         existing_sequences: set[str],
         report: DatasetIngestionReport,
     ) -> None:
+        """Processes each discovered sequence in order and records its result."""
         for index, sequence_path in enumerate(sequence_paths, start=1):
             if self._stop_requested():
                 self._mark_report_interrupted(report)
@@ -258,6 +309,7 @@ class ManipulationRunner:
                 break
 
     def _mark_report_interrupted(self, report: DatasetIngestionReport) -> None:
+        """Marks the dataset report as interrupted and records a standard error message."""
         report.status = "interrupted"
         report.errors.append("Interrupted by user.")
 
@@ -268,6 +320,22 @@ class ManipulationRunner:
         client: MosaicoClient,
         existing_sequences: set[str] | None = None,
     ) -> SequenceIngestionResult:
+        """
+        Ingests one logical sequence produced by a dataset plugin.
+
+        The runner first asks the plugin for an ingestion plan, then dispatches that
+        plan to the matching executor based on its backend. Any unexpected failure is
+        converted into a structured result so the dataset-level loop can keep going.
+
+        Args:
+            sequence_path: Sequence or virtual sequence identifier discovered by the plugin.
+            plugin: Dataset plugin responsible for building the ingestion plan.
+            client: Connected Mosaico client used by the executor.
+            existing_sequences: Optional cache of already-existing remote sequences.
+
+        Returns:
+            The structured result of ingesting, skipping, failing, or interrupting the sequence.
+        """
         try:
             plan = plugin.create_ingestion_plan(sequence_path)
         except KeyboardInterrupt:
@@ -337,6 +405,7 @@ class ManipulationRunner:
         backend: str | None = None,
         plan=None,
     ) -> SequenceIngestionResult:
+        """Builds a standardized failed sequence result."""
         return SequenceIngestionResult(
             sequence_name=sequence_name,
             status="failed",
@@ -349,6 +418,7 @@ class ManipulationRunner:
     def _build_sequence_interrupted_result(
         self, plan, local_size: int, backend: str
     ) -> SequenceIngestionResult:
+        """Builds a standardized interrupted sequence result."""
         return SequenceIngestionResult(
             sequence_name=plan.sequence_name,
             status="interrupted",
@@ -363,6 +433,13 @@ class ManipulationRunner:
         sequence_path: Path,
         plan: SequenceDescriptor | RosbagSequenceDescriptor | None = None,
     ) -> int:
+        """
+        Estimates the local size attributable to one logical sequence.
+
+        For virtual per-episode paths, the method tries to divide the shared backing
+        file size by the number of episodes so reporting remains closer to the logical
+        ingestion unit than to the container file.
+        """
         if plan is not None:
             estimated_size = plan.sequence_metadata.get("estimated_local_size_bytes")
             if estimated_size is not None:
@@ -410,6 +487,12 @@ class ManipulationRunner:
         client: MosaicoClient,
         report: DatasetIngestionReport,
     ) -> int | None:
+        """
+        Sums the remote size of the ingested sequences contained in one dataset report.
+
+        Returns `None` when at least one remote size lookup fails, so callers can
+        distinguish partial reporting failure from a real zero-byte result.
+        """
         if report.ingested == 0:
             return 0
 
@@ -437,6 +520,19 @@ class ManipulationRunner:
         client: MosaicoClient,
         sequence_name: str,
     ) -> int:
+        """
+        Computes the remote byte size of one ingested sequence from Flight metadata.
+
+        Args:
+            client: Connected Mosaico client used to query Flight metadata.
+            sequence_name: Remote sequence name whose topics should be inspected.
+
+        Returns:
+            The sum of `total_bytes` across all endpoints in the sequence FlightInfo.
+
+        Raises:
+            ValueError: If the endpoint metadata is missing or malformed.
+        """
         flight_info, _ = SequenceHandler._get_flight_info(
             client=client._control_client,
             sequence_name=sequence_name,

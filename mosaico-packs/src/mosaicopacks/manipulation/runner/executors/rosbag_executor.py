@@ -1,3 +1,12 @@
+"""
+Rosbag-backed sequence execution.
+
+This module adapts `RosbagSequenceDescriptor` plans into `mosaicolabs.ros_bridge`
+configuration objects. It keeps topic resolution and adapter override selection in a
+single place so rosbag ingestion follows the same plugin-driven planning model as
+file-backed datasets.
+"""
+
 import logging
 from collections.abc import Callable
 
@@ -12,6 +21,8 @@ LOGGER = logging.getLogger(__name__)
 
 
 class RosbagSequenceExecutor:
+    """Execute ingestion plans that delegate message replay to the ROS bridge."""
+
     def __init__(
         self,
         console,
@@ -21,6 +32,7 @@ class RosbagSequenceExecutor:
         tls_cert_path: str | None = None,
         stop_requested: Callable[[], bool] | None = None,
     ) -> None:
+        """Store connection settings used for rosbag uploads."""
         self.console = console
         self.host = host
         self.port = port
@@ -32,6 +44,13 @@ class RosbagSequenceExecutor:
         self,
         plan: RosbagSequenceDescriptor,
     ) -> tuple:
+        """Resolve requested topics and build the bridge configuration.
+
+        The plugin expresses the desired topics using normalized names. This method
+        maps them back to the concrete names present in the bag, filters out missing
+        topics, applies adapter overrides only to surviving topics, and returns the
+        total message count for reporting.
+        """
         from mosaicolabs.ros_bridge import ROSInjectionConfig
         from mosaicolabs.ros_bridge.loader import LoaderErrorPolicy, ROSLoader
 
@@ -98,6 +117,12 @@ class RosbagSequenceExecutor:
         client,
         existing_sequences: set[str] | None = None,
     ) -> bool:
+        """Upload one rosbag sequence described by `plan`.
+
+        Returns:
+            `True` when the bridge run completed and the sequence is visible in the
+            backend, `False` when the sequence was skipped or rejected before upload.
+        """
         if existing_sequences is not None and plan.sequence_name in existing_sequences:
             LOGGER.warning(
                 "Sequence '%s' already exists, skipping.", plan.sequence_name

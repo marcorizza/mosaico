@@ -1,3 +1,11 @@
+"""
+CLI entrypoint for the manipulation ingestion pack.
+
+This module owns the user-facing command flow for ingesting manipulation datasets:
+argument parsing, logging setup, interactive plugin selection, runner execution,
+and translation of ingestion outcomes into process exit codes.
+"""
+
 import argparse
 import logging
 import sys
@@ -34,6 +42,14 @@ WRITE_MODES: tuple[WriteMode, ...] = ("sync", "async")
 
 @dataclass(frozen=True)
 class DatasetSelection:
+    """
+    Stores the plugin choice associated with one dataset root.
+
+    The CLI resolves plugin selection before opening any remote connection so the
+    execution loop can focus on ingestion and reporting. A skipped dataset is
+    represented by `plugin_id=None` plus an optional warning message.
+    """
+
     plugin_id: str | None
     warning: str | None = None
 
@@ -41,6 +57,19 @@ class DatasetSelection:
 def configure_logging(
     level: str, console: Console, log_file: Path | None = None
 ) -> None:
+    """
+    Configures CLI logging for both the pack and the underlying SDK.
+
+    The manipulation CLI uses Rich for interactive terminal output while keeping the
+    SDK logger aligned to the same verbosity. When `log_file` is provided, SDK logs
+    are duplicated to disk so ingestion runs can be inspected after the terminal
+    session ends.
+
+    Args:
+        level: Requested logging verbosity.
+        console: Rich console used for terminal rendering.
+        log_file: Optional file path for persistent log output.
+    """
     logging.basicConfig(
         level=getattr(logging, level.upper(), logging.INFO),
         format="%(message)s",
@@ -72,6 +101,16 @@ def configure_logging(
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """
+    Parses the command-line arguments for the manipulation pack.
+
+    Args:
+        argv: Optional argument sequence. When omitted, arguments are read from
+            the active process command line.
+
+    Returns:
+        The parsed CLI namespace consumed by `run_pipeline`.
+    """
     parser = argparse.ArgumentParser(
         description="Ingest manipulation datasets into Mosaico.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -133,6 +172,21 @@ def _prompt_for_plugin_selection(
     available_plugins: list[DatasetPlugin],
     console: Console,
 ) -> DatasetSelection:
+    """
+    Prompts the user to choose which dataset plugin should handle one root.
+
+    Auto-detection is intentionally not forced here. The manipulation pack asks for
+    an explicit choice so ambiguous dataset layouts remain inspectable and users can
+    skip roots that are present locally but should not be ingested.
+
+    Args:
+        root: Dataset root currently being configured.
+        available_plugins: Plugins registered for interactive selection.
+        console: Rich console used for rendering the prompt.
+
+    Returns:
+        The selected plugin id, or a skip decision with an explanatory warning.
+    """
     console.print()
     console.print(f"[bold]Select plugin for[/bold] [cyan]{root}[/cyan]")
     for index, plugin in enumerate(available_plugins, start=1):
@@ -165,6 +219,25 @@ def _select_dataset_plugins(
     registry: DatasetRegistry,
     console: Console,
 ) -> dict[Path, DatasetSelection]:
+    """
+    Collects the plugin decision for each existing dataset root in the run.
+
+    The current CLI requires an interactive terminal because plugin choice is made
+    up front for every dataset root. Doing this before ingestion starts avoids mixed
+    prompting and logging while a run is already in progress.
+
+    Args:
+        dataset_roots: Dataset roots requested by the user.
+        registry: Registry exposing the available dataset plugins.
+        console: Rich console used for prompts and error reporting.
+
+    Returns:
+        A mapping from dataset root to the corresponding user selection.
+
+    Raises:
+        RuntimeError: If the CLI is not attached to an interactive terminal or if
+            no dataset plugins are registered.
+    """
     if not _is_interactive_terminal(console):
         raise RuntimeError(
             "Manipulation ingestion requires an interactive TTY to select a dataset "
@@ -192,6 +265,19 @@ def _select_dataset_plugins(
 
 
 def run_pipeline(args: argparse.Namespace) -> int:
+    """
+    Executes one manipulation ingestion run from parsed CLI arguments.
+
+    This function coordinates the whole pack lifecycle: logging setup, plugin
+    selection, dataset iteration, runner invocation, summary reporting, and final
+    exit status selection.
+
+    Args:
+        args: Parsed command-line arguments.
+
+    Returns:
+        A process-style exit code suitable for `SystemExit`.
+    """
     console = Console(stderr=True)
     configure_logging(args.log_level, console, log_file=args.log_file)
     dataset_registry = build_default_dataset_registry()
@@ -320,6 +406,7 @@ def run_pipeline(args: argparse.Namespace) -> int:
 
 
 def _format_duration(duration_s: float) -> str:
+    """Formats a duration in seconds into a compact human-readable string."""
     total_seconds = max(0, int(duration_s))
     hours, remainder = divmod(total_seconds, 3600)
     minutes, seconds = divmod(remainder, 60)
@@ -329,6 +416,7 @@ def _format_duration(duration_s: float) -> str:
 
 
 def main() -> int:
+    """Runs the manipulation CLI using arguments from the current process."""
     return run_pipeline(parse_args())
 
 

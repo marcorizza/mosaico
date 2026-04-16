@@ -1,3 +1,11 @@
+"""
+Console reporting for manipulation runs.
+
+This module turns normalized run reports into human-readable Rich panels and tables.
+It keeps presentation concerns separate from the runner so status aggregation remains
+testable and reusable outside the terminal UI.
+"""
+
 from pathlib import Path
 
 from rich.console import Console
@@ -17,7 +25,10 @@ def _describe_write_mode(write_mode: str) -> str:
 
 
 class UploadReporter:
+    """Render high-level run and dataset summaries to the console."""
+
     def __init__(self, console: Console) -> None:
+        """Store the console used for Rich output."""
         self.console = console
 
     def print_run_header(
@@ -27,6 +38,7 @@ class UploadReporter:
         port: int,
         write_mode: str,
     ) -> None:
+        """Print the static header that describes the run configuration."""
         body = (
             f"Datasets:     [bold]{len(dataset_roots)}[/bold]\n"
             f"Destination:  [bold]{host}:{port}[/bold]\n"
@@ -44,6 +56,7 @@ class UploadReporter:
         )
 
     def print_dataset_summary(self, report: DatasetIngestionReport) -> None:
+        """Print the summary panel for one dataset root."""
         size_summary = self._build_size_summary(
             original_size=report.local_size_bytes,
             remote_size=report.remote_size_bytes,
@@ -83,6 +96,7 @@ class UploadReporter:
         )
 
     def print_run_summary(self, report: RunIngestionReport) -> None:
+        """Print the final run summary and a per-dataset breakdown table."""
         size_summary = self._build_size_summary(
             original_size=report.local_size_bytes,
             remote_size=report.remote_size_bytes,

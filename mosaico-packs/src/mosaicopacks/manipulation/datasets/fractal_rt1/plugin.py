@@ -1,3 +1,11 @@
+"""
+Fractal RT-1 dataset plugin.
+
+This module maps Fractal RT-1 TFDS episodes to the generic ingestion descriptors
+consumed by the manipulation runner. The plugin hides the dataset-specific TFDS
+layout and exposes each episode as a regular sequence from the runner's perspective.
+"""
+
 from pathlib import Path
 
 from mosaicolabs import (
@@ -35,9 +43,23 @@ from mosaicopacks.manipulation.ontology import (
 
 
 class FractalRT1Plugin:
+    """
+    Dataset plugin for Fractal RT-1 TensorFlow Datasets exports.
+
+    Fractal RT-1 data is stored as TFDS shards rather than as one file per sequence.
+    This plugin therefore synthesizes virtual sequence paths for each available
+    episode and translates TFDS features into the descriptor model used by the runner.
+    """
+
     dataset_id = "fractal_rt1"
 
     def supports(self, root: Path) -> bool:
+        """
+        Returns whether the root looks like a Fractal RT-1 TFDS export.
+
+        The check deliberately uses cheap filesystem signals only: metadata files and
+        at least one expected TFRecord shard for the train split.
+        """
         if not root.is_dir():
             return False
 
@@ -51,6 +73,13 @@ class FractalRT1Plugin:
         return any(root.glob("fractal20220817_data-train.tfrecord-*"))
 
     def discover_sequences(self, root: Path) -> list[Path]:
+        """
+        Returns one virtual sequence path for each available TFDS episode.
+
+        Fractal RT-1 does not expose episodes as standalone files, so discovery
+        synthesizes stable path-like identifiers that can still flow through the
+        generic runner and reporting layers.
+        """
         from mosaicopacks.manipulation.datasets.fractal_rt1.iterators import (
             available_episodes,
         )
@@ -73,6 +102,20 @@ class FractalRT1Plugin:
         return tuple(path for path in required_paths if path not in available_paths)
 
     def create_ingestion_plan(self, sequence_path: Path) -> SequenceDescriptor:
+        """
+        Builds the declarative ingestion plan for one Fractal RT-1 episode.
+
+        The descriptor records both the synthetic identity of the episode and the
+        topic mapping from TFDS feature paths to ontology messages. This keeps the
+        runner generic even though the underlying data is loaded through TFDS rather
+        than from one concrete source file per sequence.
+
+        Args:
+            sequence_path: Virtual path identifying the episode to ingest.
+
+        Returns:
+            The sequence descriptor consumed by the file-style ingestion runner.
+        """
         from mosaicopacks.manipulation.datasets.fractal_rt1.iterators import (
             parse_virtual_sequence_path,
         )

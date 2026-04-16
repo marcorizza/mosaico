@@ -1,3 +1,12 @@
+"""
+DROID dataset plugin.
+
+This module maps DROID parquet episodes and their associated camera videos to the
+generic ingestion descriptors consumed by the manipulation runner. The plugin hides
+the split between tabular state/action data and external MP4 assets behind one
+sequence-oriented plan.
+"""
+
 from pathlib import Path
 
 from mosaicolabs import (
@@ -19,12 +28,28 @@ from mosaicopacks.manipulation.ontology.end_effector import EndEffector
 
 
 class DROIDPlugin:
+    """
+    Dataset plugin for DROID parquet exports.
+
+    DROID stores one or more episodes inside each parquet file and keeps image data
+    in a separate video tree. This plugin synthesizes one logical sequence per
+    episode so the generic runner can ingest DROID data without special-case logic.
+    """
+
     dataset_id = "droid"
 
     def supports(self, root: Path) -> bool:
+        """Returns whether the root contains at least one ingestible DROID parquet."""
         return any(self._iter_dataset_parquet_files(root))
 
     def discover_sequences(self, root: Path) -> list[Path]:
+        """
+        Returns one virtual sequence path for each episode discovered in DROID parquet files.
+
+        The returned paths are synthetic identifiers built from the parquet stem plus
+        the episode index. They let the runner treat each episode as an independent
+        sequence even though multiple episodes can live inside one parquet file.
+        """
         import pyarrow.parquet as pq
 
         sequences = []
@@ -44,6 +69,7 @@ class DROIDPlugin:
         return sorted(sequences)
 
     def _iter_dataset_parquet_files(self, root: Path):
+        """Yields candidate parquet files while skipping sidecar and metadata folders."""
         for parquet_path in root.glob("**/*.parquet"):
             try:
                 relative_path = parquet_path.relative_to(root)
@@ -59,6 +85,7 @@ class DROIDPlugin:
             yield parquet_path
 
     def _schema_names(self, parquet_path: Path) -> set[str]:
+        """Returns the parquet schema field names, or an empty set when unreadable."""
         import pyarrow.dataset as ds
 
         try:
@@ -70,6 +97,13 @@ class DROIDPlugin:
     def _extract_episode_metadata(
         self, real_path: Path, episode_index: int, base_metadata: dict
     ) -> dict:
+        """
+        Enriches the base sequence metadata with episode-level columns when available.
+
+        DROID parquet files may carry useful descriptive fields such as language
+        instructions, task category, or success labels. This helper copies those
+        values into sequence metadata when the schema exposes them.
+        """
         metadata = dict(base_metadata)
         try:
             import pyarrow.dataset as ds
@@ -114,6 +148,7 @@ class DROIDPlugin:
     def _find_missing_paths(
         self, sequence_path: Path, required_paths: tuple[str, ...]
     ) -> tuple[str, ...]:
+        """Checks required schema paths against the real parquet behind a virtual sequence."""
         real_path = sequence_path
         if "@@" in sequence_path.name:
             real_stem = sequence_path.stem.split("@@")[0]
@@ -124,6 +159,19 @@ class DROIDPlugin:
         return tuple(p for p in required_paths if p not in available_paths)
 
     def create_ingestion_plan(self, sequence_path: Path) -> SequenceDescriptor:
+        """
+        Builds the declarative ingestion plan for one DROID episode.
+
+        The descriptor binds each topic either to parquet-backed records or to video
+        frames resolved from the companion MP4 tree. From the runner's perspective,
+        both sources collapse into one ordinary sequence ingestion plan.
+
+        Args:
+            sequence_path: Virtual episode path returned by `discover_sequences`.
+
+        Returns:
+            The sequence descriptor consumed by the file-backed ingestion runner.
+        """
         if "@@" in sequence_path.name:
             stem, rest = sequence_path.name.split("@@", 1)
             ep_str_suffix = rest

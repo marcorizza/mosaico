@@ -1,3 +1,11 @@
+"""
+File-backed sequence execution.
+
+This module uploads sequences described by `SequenceDescriptor` plans. It keeps the
+execution path for file-based datasets separate from the rosbag bridge so the runner
+can choose the backend without mixing ingestion strategies.
+"""
+
 import logging
 from pathlib import Path
 
@@ -13,7 +21,15 @@ LOGGER = logging.getLogger(__name__)
 
 
 class FileSequenceExecutor:
+    """Execute ingestion plans that read topic data directly from local files.
+
+    The executor owns the high-level flow for a single file-backed sequence: skip
+    detection, progress initialization, writer creation, and delegation to
+    `TopicIngester` for the actual topic iteration.
+    """
+
     def __init__(self, console, write_mode: WriteMode = "sync") -> None:
+        """Initialize the executor with the console and topic write mode."""
         self.console = console
         self._write_mode = write_mode
         self._ingester = TopicIngester(write_mode=write_mode)
@@ -25,6 +41,19 @@ class FileSequenceExecutor:
         client,
         existing_sequences: set[str] | None = None,
     ) -> bool:
+        """Upload one file-backed sequence described by `plan`.
+
+        Args:
+            sequence_path: Local path for the sequence being ingested.
+            plan: Declarative ingestion plan built by the dataset plugin.
+            client: Mosaico client used to create the destination sequence.
+            existing_sequences: Optional cache of remote sequence names used to skip
+                already-uploaded sequences without an extra backend round trip.
+
+        Returns:
+            `True` when the sequence was created and uploaded, `False` when it was
+            skipped before ingestion started.
+        """
         if existing_sequences is not None and plan.sequence_name in existing_sequences:
             LOGGER.warning(
                 "Sequence '%s' already exists, skipping.", plan.sequence_name
@@ -86,6 +115,11 @@ class FileSequenceExecutor:
         sequence_path: Path,
         plan: SequenceDescriptor,
     ) -> dict[str, tuple[str, ...]]:
+        """Collect missing required paths for topics that support sparse datasets.
+
+        Topics with missing source files are still created, but they are marked as
+        empty so the resulting sequence shape stays predictable for downstream users.
+        """
         missing_topic_sources: dict[str, tuple[str, ...]] = {}
 
         if not plan.find_missing_paths:
