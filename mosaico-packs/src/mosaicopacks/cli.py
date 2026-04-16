@@ -16,7 +16,7 @@ PACKS_MAP = {
 
 def _print_help() -> None:
     available_packs = ", ".join(sorted(PACKS_MAP))
-    print("Usage: mosaico-packs <pack> [args...]")
+    print("Usage: mosaicopacks <pack> [args...]")
     print()
     print("Mosaico SDK Packs Runner.")
     print()
