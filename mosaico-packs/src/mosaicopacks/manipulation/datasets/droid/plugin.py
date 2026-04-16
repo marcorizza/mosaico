@@ -16,6 +16,7 @@ from mosaicolabs import (
     Integer64,
     Pose,
     RobotJoint,
+    Velocity,
 )
 
 from mosaicopacks.manipulation.contracts import SequenceDescriptor, TopicDescriptor
@@ -348,6 +349,18 @@ class DROIDPlugin:
                     ),
                     message_count=count_parquet_records(real_path, episode_index),
                     required_paths=("action.cartesian_position",),
+                ),
+                TopicDescriptor(
+                    topic_name="/action/cartesian_velocity",
+                    ontology_type=Velocity,
+                    adapter_id="droid.velocity",
+                    payload_iter=iter_parquet_records(
+                        fields={"velocity": "action.cartesian_velocity"},
+                        real_path=real_path,
+                        episode_index=episode_index,
+                    ),
+                    message_count=count_parquet_records(real_path, episode_index),
+                    required_paths=("action.cartesian_velocity",),
                 ),
                 TopicDescriptor(
                     topic_name="/action/gripper_position",

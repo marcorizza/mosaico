@@ -16,6 +16,9 @@ from mosaicopacks.manipulation.adapters.droid.robot.joint_state import (
 from mosaicopacks.manipulation.adapters.droid.robot.pose import (
     DroidPoseAdapter,
 )
+from mosaicopacks.manipulation.adapters.droid.robot.velocity import (
+    DroidVelocityAdapter,
+)
 from mosaicopacks.manipulation.adapters.droid.scalar.boolean import (
     DroidBooleanAdapter,
 )
@@ -183,6 +186,7 @@ def build_default_adapter_registry() -> AdapterRegistry:
     registry.register(ReassembleEndEffectorAdapter)
     registry.register(DroidJointStateAdapter)
     registry.register(DroidPoseAdapter)
+    registry.register(DroidVelocityAdapter)
     registry.register(DroidEndEffectorAdapter)
     registry.register(DroidVideoFrameAdapter)
     registry.register(DroidBooleanAdapter)

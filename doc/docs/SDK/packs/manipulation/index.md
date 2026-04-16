@@ -138,6 +138,7 @@ We provide built-in support for multiple open-source formats. We recommend explo
     | `/observation/state/gripper_position` | `EndEffector` |
     | `/action/joint_position` | `RobotJoint` |
     | `/action/cartesian_position` | `Pose` |
+    | `/action/cartesian_velocity` | `Velocity` |
     | `/action/gripper_position` | `EndEffector` |
     | `/camera_extrinsics/wrist_left` | `Pose` |
     | `/camera_extrinsics/exterior_1_left` | `Pose` |
