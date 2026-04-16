@@ -9,7 +9,7 @@ can choose the backend without mixing ingestion strategies.
 import logging
 from pathlib import Path
 
-from mosaicolabs import OnErrorPolicy
+from mosaicolabs import SessionLevelErrorPolicy
 
 from mosaicopacks.manipulation.contracts import SequenceDescriptor, WriteMode
 from mosaicopacks.manipulation.runner.reporters.sequence_progress import (
@@ -87,7 +87,7 @@ class FileSequenceExecutor:
         with client.sequence_create(
             sequence_name=plan.sequence_name,
             metadata=plan.sequence_metadata,
-            on_error=OnErrorPolicy.Delete,
+            on_error=SessionLevelErrorPolicy.Delete,
         ) as swriter:
             with ui.live():
                 topic_writers = self._ingester.prepare_topic_writers(swriter, plan, ui)
