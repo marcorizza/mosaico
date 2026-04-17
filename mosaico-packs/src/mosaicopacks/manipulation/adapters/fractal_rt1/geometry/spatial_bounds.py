@@ -14,9 +14,10 @@ class FractalRT1OrientationBoxAdapter(BaseAdapter):
 
     @classmethod
     def translate(cls, payload: dict) -> Message:
-        values = [float(v) for v in payload["values"]]
+        values = [float(v) for v in payload.get("values", [])]
+
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=cls.ontology_type(
                 min=Vector3d(x=values[0], y=values[1], z=values[2]),
                 max=Vector3d(x=values[3], y=values[4], z=values[5]),
@@ -30,9 +31,10 @@ class FractalRT1RobotOrientationPositionsBoxAdapter(BaseAdapter):
 
     @classmethod
     def translate(cls, payload: dict) -> Message:
-        values = [float(v) for v in payload["values"]]
+        values = [float(v) for v in payload.get("values", [])]
+
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=cls.ontology_type(
                 x_axis=Vector3d(x=values[0], y=values[1], z=values[2]),
                 y_axis=Vector3d(x=values[3], y=values[4], z=values[5]),
@@ -47,9 +49,9 @@ class FractalRT1WorkspaceBoundsAdapter(BaseAdapter):
 
     @classmethod
     def translate(cls, payload: dict) -> Message:
-        values = [float(v) for v in payload["values"]]
+        values = [float(v) for v in payload.get("values", [])]
         matrix = [values[i : i + 3] for i in range(0, len(values), 3)]
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=cls.ontology_type(values=matrix),
         )

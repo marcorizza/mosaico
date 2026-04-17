@@ -9,8 +9,9 @@ class FractalRT1Vector3dAdapter(BaseAdapter):
 
     @classmethod
     def translate(cls, payload: dict) -> Message:
-        vector = payload["vector"]
+        vector = payload.get("vector")
+
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=Vector3d(x=vector[0], y=vector[1], z=vector[2]),
         )

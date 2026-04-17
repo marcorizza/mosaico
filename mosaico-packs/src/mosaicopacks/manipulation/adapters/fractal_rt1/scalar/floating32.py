@@ -10,6 +10,6 @@ class FractalRT1Floating32Adapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
-            data=Floating32(data=float(payload["value"])),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
+            data=Floating32(data=float(payload.get("value", 0.0))),
         )

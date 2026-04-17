@@ -10,6 +10,6 @@ class FractalRT1BooleanAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
-            data=Boolean(data=bool(payload["value"])),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
+            data=Boolean(data=bool(payload.get("value"))),
         )

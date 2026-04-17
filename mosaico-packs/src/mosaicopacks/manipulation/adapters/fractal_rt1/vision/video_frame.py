@@ -11,9 +11,9 @@ class FractalRT1VideoFrameAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=CompressedImage.from_image(
-                PILImage.fromarray(payload["image"]),
+                PILImage.fromarray(payload.get("image")),
                 format=ImageFormat.JPEG,
                 quality=90,
             ),

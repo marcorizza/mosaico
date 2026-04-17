@@ -9,9 +9,10 @@ class FractalRT1PoseAdapter(BaseAdapter):
 
     @classmethod
     def translate(cls, payload: dict) -> Message:
-        pose = payload["pose"]
+        pose = payload.get("pose")
+
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=Pose(
                 position=Point3d(x=pose[0], y=pose[1], z=pose[2]),
                 orientation=Quaternion(

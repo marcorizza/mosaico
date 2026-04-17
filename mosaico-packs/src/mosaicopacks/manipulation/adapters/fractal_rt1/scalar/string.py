@@ -9,10 +9,12 @@ class FractalRT1StringAdapter(BaseAdapter):
 
     @classmethod
     def translate(cls, payload: dict) -> Message:
-        value = payload["value"]
+        value = payload.get("value")
+
         if isinstance(value, bytes):
             value = value.decode("utf-8", errors="replace")
+
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=String(data=str(value)),
         )

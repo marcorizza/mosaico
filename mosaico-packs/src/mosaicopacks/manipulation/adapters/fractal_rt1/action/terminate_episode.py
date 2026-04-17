@@ -13,8 +13,8 @@ class FractalRT1TerminateEpisodeAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp_ns"]),
+            timestamp_ns=int(payload.get("timestamp_ns", 0.0)),
             data=TerminateEpisode(
-                terminate_episode=[int(value) for value in payload["value"]]
+                terminate_episode=[int(value) for value in payload.get("value", [])]
             ),
         )
