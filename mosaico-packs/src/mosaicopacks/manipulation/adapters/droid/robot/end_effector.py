@@ -13,26 +13,24 @@ class DroidEndEffectorAdapter(BaseAdapter):
     def translate(cls, payload: dict) -> Message:
         pos = payload.get("position", 0.0)
         vel = payload.get("velocity", 0.0)
-        if pos is None:
-            pos = 0.0
-        if vel is None:
-            vel = 0.0
 
-        if isinstance(pos, (list, tuple, np.ndarray)):
-            pos_list = list(pos)
-        else:
-            pos_list = [float(pos)]
-
-        if isinstance(vel, (list, tuple, np.ndarray)):
-            vel_list = list(vel)
-        else:
-            vel_list = [float(vel)]
+        positions = (
+            [float(pos)]
+            if not isinstance(pos, (list, tuple, np.ndarray))
+            else list(pos)
+        )
+        velocities = (
+            [float(vel)]
+            if not isinstance(vel, (list, tuple, np.ndarray))
+            else list(vel)
+        )
 
         return Message(
-            timestamp_ns=int(payload["timestamp"] * 1e9),
+            timestamp_ns=int(payload.get("timestamp", 0.0) * 1e9),
             data=EndEffector(
-                positions=pos_list,
-                velocities=vel_list,
-                efforts=[0.0] * len(pos_list),
+                positions=positions,
+                velocities=velocities,
+                # Efforts are not provided in DROID, so we set them to zero
+                efforts=[0.0] * len(positions),
             ),
         )

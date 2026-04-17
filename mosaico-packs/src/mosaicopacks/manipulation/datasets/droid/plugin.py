@@ -363,7 +363,7 @@ class DROIDPlugin:
                     required_paths=("action.cartesian_velocity",),
                 ),
                 TopicDescriptor(
-                    topic_name="/action/gripper_position",
+                    topic_name="/action/gripper",
                     ontology_type=EndEffector,
                     adapter_id="droid.end_effector",
                     payload_iter=iter_parquet_records(

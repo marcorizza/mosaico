@@ -10,9 +10,9 @@ class DroidVideoFrameAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp"] * 1e9),
+            timestamp_ns=int(payload.get("timestamp", 0.0) * 1e9),
             data=CompressedImage(
-                data=payload["image"],
+                data=payload.get("image"),
                 format=ImageFormat.JPEG,
             ),
         )

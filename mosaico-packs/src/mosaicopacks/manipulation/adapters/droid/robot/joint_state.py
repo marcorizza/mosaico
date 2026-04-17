@@ -13,11 +13,12 @@ class DroidJointStateAdapter(BaseAdapter):
     def translate(cls, payload: dict) -> Message:
         pos = payload.get("position", [])
         vel = payload.get("velocity", [])
+
         pos = list(pos) if pos is not None else []
         vel = list(vel) if vel is not None else []
 
         return Message(
-            timestamp_ns=int(payload["timestamp"] * 1e9),
+            timestamp_ns=int(payload.get("timestamp", 0.0) * 1e9),
             data=RobotJoint(
                 names=cls.JOINT_NAMES if len(pos) else [],
                 positions=pos,
