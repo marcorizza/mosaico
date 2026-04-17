@@ -11,10 +11,10 @@ class ReassembleAudioAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["ts_start"] * 1e9),
+            timestamp_ns=int(payload.get("ts_start", 0.0) * 1e9),
             data=AudioDataStamped(
                 audio_data=AudioData(
-                    data=bytes(payload["audio"]),
+                    data=bytes(payload.get("audio")),
                 ),
             ),
         )

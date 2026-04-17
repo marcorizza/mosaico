@@ -10,17 +10,17 @@ class ReassembleVelocityAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp"] * 1e9),
+            timestamp_ns=int(payload.get("timestamp", 0.0) * 1e9),
             data=Velocity(
                 linear=Vector3d(
-                    x=payload["velocity"][0],
-                    y=payload["velocity"][1],
-                    z=payload["velocity"][2],
+                    x=payload.get("velocity")[0],
+                    y=payload.get("velocity")[1],
+                    z=payload.get("velocity")[2],
                 ),
                 angular=Vector3d(
-                    x=payload["velocity"][3],
-                    y=payload["velocity"][4],
-                    z=payload["velocity"][5],
+                    x=payload.get("velocity")[3],
+                    y=payload.get("velocity")[4],
+                    z=payload.get("velocity")[5],
                 ),
             ),
         )

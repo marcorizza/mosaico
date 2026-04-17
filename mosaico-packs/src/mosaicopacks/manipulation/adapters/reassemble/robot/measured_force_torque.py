@@ -10,17 +10,17 @@ class ReassembleMeasuredForceTorqueAdapter(BaseAdapter):
     @classmethod
     def translate(cls, payload: dict) -> Message:
         return Message(
-            timestamp_ns=int(payload["timestamp"] * 1e9),
+            timestamp_ns=int(payload.get("timestamp", 0.0) * 1e9),
             data=ForceTorque(
                 force=Vector3d(
-                    x=payload["measured_force"][0],
-                    y=payload["measured_force"][1],
-                    z=payload["measured_force"][2],
+                    x=payload.get("measured_force")[0],
+                    y=payload.get("measured_force")[1],
+                    z=payload.get("measured_force")[2],
                 ),
                 torque=Vector3d(
-                    x=payload["measured_torque"][0],
-                    y=payload["measured_torque"][1],
-                    z=payload["measured_torque"][2],
+                    x=payload.get("measured_torque")[0],
+                    y=payload.get("measured_torque")[1],
+                    z=payload.get("measured_torque")[2],
                 ),
             ),
         )
