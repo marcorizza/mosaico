@@ -16,6 +16,7 @@ from mosaicolabs import MosaicoClient
 from mosaicolabs.handlers.sequence_handler import SequenceHandler
 from mosaicolabs.platform.helpers import _decode_app_metadata
 from rich.console import Console
+from rich.panel import Panel
 
 from mosaicopacks.manipulation.contracts import (
     DatasetPlugin,
@@ -389,6 +390,18 @@ class ManipulationRunner:
         if self._stop_requested():
             return self._build_sequence_interrupted_result(plan, local_size, backend)
 
+        if ingested:
+            try:
+                remote_size = self._get_remote_sequence_size(client, plan.sequence_name)
+                self._print_injection_summary(
+                    plan.sequence_name, local_size, remote_size
+                )
+            except Exception:
+                LOGGER.debug(
+                    "Could not retrieve remote size for injection summary of '%s'.",
+                    plan.sequence_name,
+                )
+
         return SequenceIngestionResult(
             sequence_name=plan.sequence_name,
             status="ingested" if ingested else "skipped",
@@ -426,6 +439,39 @@ class ManipulationRunner:
             backend=backend,
             plan=plan,
             error="Interrupted by user.",
+        )
+
+    def _print_injection_summary(
+        self, sequence_name: str, local_size: int, remote_size: int
+    ) -> None:
+        if local_size == 0 or remote_size == 0:
+            LOGGER.warning(
+                "Skipping injection summary for '%s' due to zero local or remote size (local_size=%d, remote_size=%d).",
+                sequence_name,
+                local_size,
+                remote_size,
+            )
+            return
+
+        ratio = local_size / remote_size
+        savings = max(0.0, (1 - (remote_size / local_size)) * 100)
+        mb = 1024 * 1024
+        summary_text = (
+            f"Sequence:      [bold]{sequence_name}[/bold]\n"
+            f"Original Size: [bold]{local_size / mb:.2f} MB[/bold]\n"
+            f"Remote Size:   [bold]{remote_size / mb:.2f} MB[/bold]\n"
+            f"Ratio:         [bold cyan]{ratio:.2f}x[/bold cyan]\n"
+            f"Space Saved:   [bold green]{savings:.1f}%[/bold green]"
+        )
+        self.console.print(
+            Panel(
+                summary_text,
+                title="[bold]Injection Summary[/bold]",
+                expand=False,
+                border_style="green",
+                padding=1,
+                highlight=True,
+            )
         )
 
     def _get_local_sequence_size(
