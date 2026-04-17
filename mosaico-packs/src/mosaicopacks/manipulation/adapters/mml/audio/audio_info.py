@@ -20,13 +20,15 @@ class AudioInfoAdapter(ROSAdapterBase[AudioInfo]):
     @classmethod
     def from_dict(cls, ros_data: dict) -> AudioInfo:
         return AudioInfo(
-            channels=int(ros_data["channels"]),
-            sample_rate=int(ros_data["sample_rate"]),
-            sample_format=str(ros_data["sample_format"]),
+            channels=int(ros_data.get("channels")),
+            sample_rate=int(ros_data.get("sample_rate")),
+            sample_format=str(ros_data.get("sample_format")),
             bitrate=(
-                None if ros_data.get("bitrate") is None else int(ros_data["bitrate"])
+                None
+                if ros_data.get("bitrate") is None
+                else int(ros_data.get("bitrate"))
             ),
-            coding_format=AudioFormat(str(ros_data["coding_format"]).lower()),
+            coding_format=AudioFormat(str(ros_data.get("coding_format")).lower()),
         )
 
     @classmethod

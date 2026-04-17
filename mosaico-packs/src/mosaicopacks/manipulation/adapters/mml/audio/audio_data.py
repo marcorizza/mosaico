@@ -12,7 +12,7 @@ class AudioDataAdapter(ROSAdapterBase[AudioData]):
 
     @classmethod
     def from_dict(cls, ros_data: dict) -> AudioData:
-        return AudioData(data=bytes(ros_data["data"]))
+        return AudioData(data=bytes(ros_data.get("data")))
 
     @classmethod
     def schema_metadata(cls, ros_data: dict, **kwargs: Any) -> Optional[dict]:
